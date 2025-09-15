@@ -8,7 +8,8 @@ import {
   PlusCircle, 
   User, 
   MoreHorizontal,
-  HelpCircle 
+  HelpCircle,
+  Sparkles
 } from "lucide-react";
 
 const Sidebar = () => {
@@ -30,6 +31,7 @@ const Sidebar = () => {
       case 'message-circle': return MessageCircle;
       case 'bell': return Bell;
       case 'plus-circle': return PlusCircle;
+      case 'sparkles': return Sparkles;
       case 'user': return User;
       case 'more-horizontal': return MoreHorizontal;
       default: return Home;

@@ -11,8 +11,10 @@ import Notifications from "@/pages/Notifications";
 import Create from "@/pages/Create";
 import Profile from "@/pages/Profile";
 import More from "@/pages/More";
+import Aura from "@/pages/Aura";
 import NotFound from "@/pages/not-found";
 import { useState } from "react";
+import { AuthProvider } from "@/lib/AuthContext";
 
 function AppRoutes() {
   return (
@@ -23,6 +25,7 @@ function AppRoutes() {
       <Route path="/mensajes" component={Messages} />
       <Route path="/notificaciones" component={Notifications} />
       <Route path="/crear" component={Create} />
+      <Route path="/aura" component={Aura} />
       <Route path="/perfil" component={Profile} />
       <Route path="/mas" component={More} />
       <Route component={NotFound} />
@@ -34,7 +37,7 @@ function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <>
+    <AuthProvider>
       <Background />
       <div className="flex flex-col min-h-screen">
         <div className="flex flex-1 overflow-hidden">
@@ -52,7 +55,7 @@ function App() {
         <Footer />
       </div>
       <Toaster />
-    </>
+    </AuthProvider>
   );
 }
 
