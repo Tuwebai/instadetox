@@ -1,38 +1,15 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-// Definir el tipo User localmente
-export interface User {
-  id: string;
-  email?: string;
-  username?: string;
-  avatar_url?: string;
-  full_name?: string;
-  created_at?: string;
-  last_seen?: string;
-  online?: boolean;
-}
+import { localAuthService, User } from './localAuth';
 
 interface AuthContextProps {
   user: User | null;
   loading: boolean;
   error: Error | null;
-  signIn: (email: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
-
-// Usuario ficticio para desarrollo
-const DEV_USER: User = {
-  id: '00000000-0000-0000-0000-000000000001',
-  email: 'usuario@ejemplo.com',
-  username: 'usuario_ejemplo',
-  avatar_url: 'https://i.pravatar.cc/150?img=1',
-  full_name: 'Usuario Ejemplo',
-  created_at: new Date().toISOString(),
-  last_seen: new Date().toISOString(),
-  online: true,
-};
 
 export function useAuth() {
   const context = useContext(AuthContext);
@@ -57,16 +34,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         setLoading(true);
         
-        console.log('Modo desarrollo activado, usando usuario ficticio');
-        // Simular un pequeño retraso
-        setTimeout(() => {
-          setUser(DEV_USER);
-          setLoading(false);
-        }, 500);
+        console.log('Cargando usuario desde autenticación local...');
+        const user = await localAuthService.loadUser();
+        
+        if (user) {
+          setUser(user);
+          console.log('Usuario cargado:', user.email);
+        } else {
+          console.log('No hay usuario autenticado');
+        }
+        
+        setLoading(false);
       } catch (err) {
         console.error('Error al cargar el usuario:', err);
         setError(err as Error);
-        setUser(DEV_USER);
         setLoading(false);
       }
     }
@@ -74,22 +55,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     loadUser();
   }, []);
 
-  // Iniciar sesión con correo electrónico
-  const signIn = async (email: string) => {
+  // Iniciar sesión con correo electrónico y contraseña
+  const signIn = async (email: string, password: string) => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log('Modo desarrollo activado, iniciando sesión con usuario ficticio');
-      // Simular un pequeño retraso
-      setTimeout(() => {
-        setUser(DEV_USER);
-        setLoading(false);
-      }, 500);
+      console.log('Iniciando sesión con:', email);
+      const result = await localAuthService.signIn(email, password);
+      
+      if (result.user) {
+        setUser(result.user);
+        console.log('Sesión iniciada exitosamente');
+      } else {
+        setError(new Error(result.error || 'Error al iniciar sesión'));
+        console.error('Error al iniciar sesión:', result.error);
+      }
+      
+      setLoading(false);
     } catch (err) {
       console.error('Error al iniciar sesión:', err);
       setError(err as Error);
-      setUser(DEV_USER);
       setLoading(false);
     }
   };
@@ -99,12 +85,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setLoading(true);
       
-      console.log('Modo desarrollo activado, cerrando sesión ficticia');
-      // Simular un pequeño retraso
-      setTimeout(() => {
-        setUser(null);
-        setLoading(false);
-      }, 500);
+      console.log('Cerrando sesión...');
+      await localAuthService.signOut();
+      setUser(null);
+      setError(null);
+      
+      console.log('Sesión cerrada exitosamente');
+      setLoading(false);
     } catch (err) {
       console.error('Error al cerrar sesión:', err);
       setError(err as Error);

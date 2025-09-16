@@ -45,9 +45,10 @@ export const handleChatRequest = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "El formato de los mensajes es incorrecto" });
     }
 
-    // Si hay problemas con la API, usamos una respuesta local para fines de demostración
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "demo") {
+    // Verificar si la API key está configurada correctamente
+    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "demo" || process.env.GEMINI_API_KEY.trim() === "") {
       console.log("Usando modo de demostración (sin API Key de Gemini)");
+      console.log("GEMINI_API_KEY:", process.env.GEMINI_API_KEY ? "Configurada" : "No configurada");
       
       // Respondemos con un mensaje genérico para demostración
       return res.json({

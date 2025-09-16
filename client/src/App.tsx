@@ -12,11 +12,37 @@ import Create from "@/pages/Create";
 import Profile from "@/pages/Profile";
 import More from "@/pages/More";
 import Aura from "@/pages/Aura";
+import Login from "@/pages/Login";
 import NotFound from "@/pages/not-found";
 import { useState } from "react";
-import { AuthProvider } from "@/lib/AuthContext";
+import { AuthProvider, useAuth } from "@/lib/AuthContext";
 
 function AppRoutes() {
+  const { user, loading } = useAuth();
+
+  // Mostrar loading mientras se carga la autenticación
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-400">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si no hay usuario autenticado, mostrar login
+  if (!user) {
+    return (
+      <Switch>
+        <Route path="/login" component={Login} />
+        <Route component={Login} />
+      </Switch>
+    );
+  }
+
+  // Si hay usuario autenticado, mostrar la aplicación
   return (
     <Switch>
       <Route path="/" component={Home} />
