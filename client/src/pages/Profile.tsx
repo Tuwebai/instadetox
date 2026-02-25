@@ -201,6 +201,7 @@ const Profile = () => {
   const prefetchedPageRef = useRef<Record<ProfileTab, TabPrefetchState | null>>(createInitialPrefetchState());
   const prefetchingRef = useRef<Record<ProfileTab, boolean>>(createInitialPrefetchingState());
   const profileCacheRef = useRef<Map<string, CachedProfile>>(new Map());
+  const localFollowOpsRef = useRef<Set<string>>(new Set());
 
   const targetUsername = useMemo(() => {
     if (isPublicRouteMatch && params?.username) return params.username;
@@ -1047,6 +1048,11 @@ const Profile = () => {
         const followerId = row.follower_id as string | undefined;
         const followingId = row.following_id as string | undefined;
         if (!followerId || !followingId) return;
+        const followOpKey = `${followerId}:${followingId}`;
+        if (localFollowOpsRef.current.has(followOpKey)) {
+          localFollowOpsRef.current.delete(followOpKey);
+          return;
+        }
 
         if (followingId === profileId) {
           setFollowers((prev) => (eventType === "INSERT" ? prev + 1 : Math.max(0, prev - 1)));
@@ -1072,6 +1078,8 @@ const Profile = () => {
 
     setFollowLoading(true);
     const currentlyFollowing = isFollowing;
+    const followOpKey = `${user.id}:${profileData.id}`;
+    localFollowOpsRef.current.add(followOpKey);
 
     setIsFollowing(!currentlyFollowing);
     setFollowers((prev) => (currentlyFollowing ? Math.max(0, prev - 1) : prev + 1));
@@ -1086,6 +1094,7 @@ const Profile = () => {
       if (error) {
         setIsFollowing(true);
         setFollowers((prev) => prev + 1);
+        localFollowOpsRef.current.delete(followOpKey);
       }
     } else {
       const { error } = await supabase.from("follows").insert({
@@ -1096,9 +1105,13 @@ const Profile = () => {
       if (error) {
         setIsFollowing(false);
         setFollowers((prev) => Math.max(0, prev - 1));
+        localFollowOpsRef.current.delete(followOpKey);
       }
     }
 
+    window.setTimeout(() => {
+      localFollowOpsRef.current.delete(followOpKey);
+    }, 5000);
     setFollowLoading(false);
   };
 
