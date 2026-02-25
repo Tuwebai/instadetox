@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { NAVIGATION_ITEMS } from "@/lib/utils";
+import { useAuth } from "@/lib/AuthContext";
 import { 
   Home, 
   Search, 
@@ -19,6 +20,7 @@ interface MobileNavProps {
 }
 
 const MobileNav: React.FC<MobileNavProps> = ({ isOpen, onOpen, onClose }) => {
+  const { user } = useAuth();
   const [location] = useLocation();
   
   const isActive = (path: string) => {
@@ -46,7 +48,7 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, onOpen, onClose }) => {
   return (
     <>
       {/* Mobile Header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-10 glass-dark p-4 flex justify-between items-center">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-10 glass-dark p-4 flex justify-between items-center">
         <h1 className="text-xl font-semibold">
           <span className="bg-gradient-text">InstaDetox</span>
         </h1>
@@ -57,7 +59,7 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, onOpen, onClose }) => {
       
       {/* Mobile Menu */}
       <div 
-        className={`md:hidden fixed inset-0 z-20 glass-dark transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out`}
+        className={`lg:hidden fixed inset-0 z-20 glass-dark transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out`}
       >
         <div className="flex flex-col h-full p-4">
           <div className="flex justify-between items-center mb-6">
@@ -73,12 +75,13 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, onOpen, onClose }) => {
             <ul className="space-y-1">
               {NAVIGATION_ITEMS.map((item) => {
                 const IconComponent = getIconComponent(item.icon);
+                const itemPath = item.path === "/perfil" ? `/${user?.username ?? "perfil"}` : item.path;
                 
                 return (
                   <li key={item.name}>
                     <Link 
-                      href={item.path} 
-                      className={`nav-link flex items-center px-4 py-3 rounded-lg ${isActive(item.path) ? 'active' : ''}`}
+                      href={itemPath} 
+                      className={`nav-link flex items-center px-4 py-3 rounded-lg ${isActive(itemPath) ? 'active' : ''}`}
                       onClick={onClose}
                     >
                       <IconComponent className="w-5 h-5 mr-3" />

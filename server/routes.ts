@@ -1,7 +1,5 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { handleChatRequest } from "./aura";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // put application routes here
@@ -9,9 +7,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // use storage to perform CRUD operations on the storage interface
   // e.g. storage.insertUser(user) or storage.getUserByUsername(username)
-
-  // Ruta para el chat con AURA (asistente IA)
-  app.post("/api/chat", handleChatRequest);
 
   const httpServer = createServer(app);
 

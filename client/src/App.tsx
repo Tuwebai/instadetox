@@ -1,4 +1,4 @@
-import { Switch, Route, Router } from "wouter";
+import { Switch, Route } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { Background } from "@/components/ui/background";
 import Sidebar from "@/components/Sidebar";
@@ -11,7 +11,6 @@ import Notifications from "@/pages/Notifications";
 import Create from "@/pages/Create";
 import Profile from "@/pages/Profile";
 import More from "@/pages/More";
-import Aura from "@/pages/Aura";
 import Login from "@/pages/Login";
 import NotFound from "@/pages/not-found";
 import { useState } from "react";
@@ -51,9 +50,9 @@ function AppRoutes() {
       <Route path="/mensajes" component={Messages} />
       <Route path="/notificaciones" component={Notifications} />
       <Route path="/crear" component={Create} />
-      <Route path="/aura" component={Aura} />
-      <Route path="/perfil" component={Profile} />
       <Route path="/mas" component={More} />
+      <Route path="/login" component={Home} />
+      <Route path="/:username" component={Profile} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -74,7 +73,7 @@ function App() {
             onClose={() => setMobileMenuOpen(false)} 
           />
           
-          <main className="flex-1 md:ml-64 pt-16 md:pt-0 px-4 md:px-8 py-6">
+          <main className="flex-1 lg:ml-64 pt-16 lg:pt-0 px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
             <AppRoutes />
           </main>
         </div>

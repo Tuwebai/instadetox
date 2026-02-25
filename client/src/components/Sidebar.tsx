@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { NAVIGATION_ITEMS } from "@/lib/utils";
+import { useAuth } from "@/lib/AuthContext";
 import { 
   Home, 
   Search, 
@@ -13,6 +14,7 @@ import {
 } from "lucide-react";
 
 const Sidebar = () => {
+  const { user } = useAuth();
   const [location] = useLocation();
   
   const isActive = (path: string) => {
@@ -39,7 +41,7 @@ const Sidebar = () => {
   };
 
   return (
-    <aside className="glass-dark fixed h-full w-64 hidden md:flex flex-col py-4 z-10">
+    <aside className="glass-dark fixed h-full w-64 hidden lg:flex flex-col py-4 z-10">
       <div className="px-4 mb-6">
         <h1 className="text-2xl font-semibold flex items-center">
           <span className="bg-gradient-text">InstaDetox</span>
@@ -51,10 +53,11 @@ const Sidebar = () => {
         <ul className="space-y-1 px-2">
           {NAVIGATION_ITEMS.map((item) => {
             const IconComponent = getIconComponent(item.icon);
+            const itemPath = item.path === "/perfil" ? `/${user?.username ?? "perfil"}` : item.path;
             
             return (
               <li key={item.name}>
-                <Link href={item.path} className={`nav-link flex items-center px-4 py-3 rounded-lg ${isActive(item.path) ? 'active' : ''}`}>
+                <Link href={itemPath} className={`nav-link flex items-center px-4 py-3 rounded-lg ${isActive(itemPath) ? 'active' : ''}`}>
                   <IconComponent className="w-5 h-5 mr-3" />
                   <span>{item.name}</span>
                 </Link>

@@ -1,114 +1,250 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { localAuthService, User } from './localAuth';
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import type { User as SupabaseAuthUser } from "@supabase/supabase-js";
+import { hasSupabaseConfig, supabase } from "./supabase";
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  username: string;
+  full_name: string;
+  avatar_url: string;
+}
+
+interface SignUpPayload {
+  email: string;
+  password: string;
+  username?: string;
+  fullName?: string;
+}
 
 interface AuthContextProps {
-  user: User | null;
+  user: AuthUser | null;
   loading: boolean;
   error: Error | null;
+  updateUserProfile: (patch: Partial<Pick<AuthUser, "username" | "full_name" | "avatar_url">>) => void;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (payload: SignUpPayload) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
+const PROFILE_TIMEOUT_MS = 6000;
+
+const withTimeout = async <T,>(promise: Promise<T>, ms = PROFILE_TIMEOUT_MS): Promise<T> => {
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    const id = window.setTimeout(() => {
+      window.clearTimeout(id);
+      reject(new Error("Timeout al cargar perfil"));
+    }, ms);
+  });
+
+  return Promise.race([promise, timeoutPromise]);
+};
+
+const mapAuthUser = (
+  authUser: SupabaseAuthUser,
+  profile?: {
+    username?: string | null;
+    full_name?: string | null;
+    avatar_url?: string | null;
+  } | null,
+): AuthUser => {
+  const email = authUser.email ?? "";
+  const emailUsername = email.split("@")[0] || "instadetox_user";
+
+  return {
+    id: authUser.id,
+    email,
+    username:
+      profile?.username ||
+      (authUser.user_metadata?.username as string | undefined) ||
+      emailUsername,
+    full_name:
+      profile?.full_name ||
+      (authUser.user_metadata?.full_name as string | undefined) ||
+      emailUsername,
+    avatar_url:
+      profile?.avatar_url ||
+      (authUser.user_metadata?.avatar_url as string | undefined) ||
+      "",
+  };
+};
+
+const loadProfile = async (userId: string) => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("username, full_name, avatar_url")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) return null;
+  return data;
+};
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth debe ser usado dentro de un AuthProvider');
+  if (!context) {
+    throw new Error("useAuth debe ser usado dentro de un AuthProvider");
   }
   return context;
 }
 
-interface AuthProviderProps {
-  children: ReactNode;
-}
-
-export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  // Cargar el usuario al iniciar
   useEffect(() => {
-    async function loadUser() {
+    let isMounted = true;
+
+    if (!hasSupabaseConfig || !supabase) {
+      if (isMounted) {
+        setError(new Error("Faltan VITE_SUPABASE_URL o VITE_SUPABASE_ANON_KEY"));
+        setLoading(false);
+      }
+      return;
+    }
+
+    const client = supabase;
+
+    const hydrateFromSession = async (sessionUser: SupabaseAuthUser | null) => {
+      if (!sessionUser) {
+        if (isMounted) setUser(null);
+        return;
+      }
+
+      // Primero usuario base desde session (sin bloquear UI por perfil)
+      if (isMounted) setUser(mapAuthUser(sessionUser, null));
+
+      // Luego perfil enriquecido (fallback silencioso si falla)
+      const profile = await withTimeout(loadProfile(sessionUser.id)).catch(() => null);
+      if (isMounted) setUser(mapAuthUser(sessionUser, profile));
+    };
+
+    const init = async () => {
       try {
         setLoading(true);
-        
-        console.log('Cargando usuario desde autenticación local...');
-        const user = await localAuthService.loadUser();
-        
-        if (user) {
-          setUser(user);
-          console.log('Usuario cargado:', user.email);
-        } else {
-          console.log('No hay usuario autenticado');
-        }
-        
-        setLoading(false);
-      } catch (err) {
-        console.error('Error al cargar el usuario:', err);
-        setError(err as Error);
-        setLoading(false);
-      }
-    }
+        setError(null);
 
-    loadUser();
+        const {
+          data: { session },
+          error: sessionError,
+        } = await client.auth.getSession();
+
+        if (sessionError) throw sessionError;
+        await hydrateFromSession(session?.user ?? null);
+      } catch (err) {
+        if (isMounted) {
+          setUser(null);
+          setError(err as Error);
+        }
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    void init();
+
+    const {
+      data: { subscription },
+    } = client.auth.onAuthStateChange(async (_event, session) => {
+      try {
+        await hydrateFromSession(session?.user ?? null);
+      } catch (err) {
+        if (session?.user) {
+          if (isMounted) setUser(mapAuthUser(session.user, null));
+        } else {
+          if (isMounted) setUser(null);
+        }
+        if (isMounted) setError(err as Error);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
-  // Iniciar sesión con correo electrónico y contraseña
   const signIn = async (email: string, password: string) => {
+    if (!supabase) return;
+
     try {
-      setLoading(true);
       setError(null);
-      
-      console.log('Iniciando sesión con:', email);
-      const result = await localAuthService.signIn(email, password);
-      
-      if (result.user) {
-        setUser(result.user);
-        console.log('Sesión iniciada exitosamente');
-      } else {
-        setError(new Error(result.error || 'Error al iniciar sesión'));
-        console.error('Error al iniciar sesión:', result.error);
+
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) throw signInError;
+
+      if (data.user) {
+        setUser(mapAuthUser(data.user, null));
+        const profile = await withTimeout(loadProfile(data.user.id)).catch(() => null);
+        setUser(mapAuthUser(data.user, profile));
       }
-      
-      setLoading(false);
     } catch (err) {
-      console.error('Error al iniciar sesión:', err);
       setError(err as Error);
-      setLoading(false);
     }
   };
 
-  // Cerrar sesión
-  const signOut = async () => {
+  const signUp = async ({ email, password, username, fullName }: SignUpPayload) => {
+    if (!supabase) return;
+
     try {
-      setLoading(true);
-      
-      console.log('Cerrando sesión...');
-      await localAuthService.signOut();
-      setUser(null);
       setError(null);
-      
-      console.log('Sesión cerrada exitosamente');
-      setLoading(false);
+
+      const emailBase = email.split("@")[0] || "instadetox_user";
+      const safeUsername = (username || emailBase).toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 30);
+
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            username: safeUsername || "instadetox_user",
+            full_name: fullName || emailBase,
+          },
+        },
+      });
+
+      if (signUpError) throw signUpError;
+
+      if (data.user && data.session) {
+        setUser(mapAuthUser(data.user, null));
+        const profile = await withTimeout(loadProfile(data.user.id)).catch(() => null);
+        setUser(mapAuthUser(data.user, profile));
+      }
     } catch (err) {
-      console.error('Error al cerrar sesión:', err);
       setError(err as Error);
-      setLoading(false);
     }
   };
 
-  const value = {
-    user,
-    loading,
-    error,
-    signIn,
-    signOut
+  const signOut = async () => {
+    if (!supabase) return;
+
+    try {
+      setError(null);
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) throw signOutError;
+      setUser(null);
+    } catch (err) {
+      setError(err as Error);
+    }
+  };
+
+  const updateUserProfile = (patch: Partial<Pick<AuthUser, "username" | "full_name" | "avatar_url">>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      return { ...prev, ...patch };
+    });
   };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{ user, loading, error, updateUserProfile, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

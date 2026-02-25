@@ -1,102 +1,78 @@
-# Configuración de Variables de Entorno para InstaDetox
+# Configuracion de Variables de Entorno para InstaDetox
 
-## 📋 Variables Requeridas
+## Variables Requeridas
 
-Crea un archivo `.env` en la raíz del proyecto con las siguientes variables:
+Este proyecto usa variables separadas por servicio.
+
+### `client/.env` (frontend)
 
 ```env
-# =====================================================
-# CONFIGURACIÓN DE SUPABASE
-# =====================================================
-VITE_SUPABASE_URL=tu_url_de_supabase_aqui
-VITE_SUPABASE_ANON_KEY=tu_anon_key_de_supabase_aqui
-
-# =====================================================
-# CONFIGURACIÓN DE GEMINI AI
-# =====================================================
-GEMINI_API_KEY=tu_api_key_de_gemini_aqui
-
-# =====================================================
-# CONFIGURACIÓN DEL SERVIDOR
-# =====================================================
-PORT=5000
-NODE_ENV=development
-
-# =====================================================
-# CONFIGURACIÓN DE DESARROLLO
-# =====================================================
-# Usuario de desarrollo (opcional)
-DEV_USER_EMAIL=tuwebai@gmail.com
-DEV_USER_PASSWORD=hola123
+VITE_SUPABASE_URL=tu_url_de_supabase
+VITE_SUPABASE_ANON_KEY=tu_anon_key_de_supabase
+VITE_API_URL=http://localhost:3000
 ```
 
-## 🔧 Pasos para Configurar
+### `server/.env` (backend)
+
+PORT=3000
+HOST=0.0.0.0
+CORS_ORIGIN=http://localhost:5173
+RATE_LIMIT_WINDOW_MS=900000
+RATE_LIMIT_MAX=200
+```
+
+## Pasos para Configurar
 
 ### 1. Configurar Supabase
 
-1. Ve a [supabase.com](https://supabase.com) y crea un nuevo proyecto
-2. Ejecuta el script `supabase-setup.sql` en el SQL Editor de Supabase
-3. Ve a Settings > API en tu proyecto de Supabase
-4. Copia la URL y la Anon Key
-5. Pega estos valores en tu archivo `.env`
+1. Crea un proyecto en [supabase.com](https://supabase.com).
+2. Ejecuta `supabase-setup.sql` en el SQL Editor.
+3. En Settings > API, copia URL y Anon Key.
+4. Carga URL y Anon Key en `client/.env`.
+5. Configura backend en `server/.env`.
 
-### 2. Configurar Gemini AI
+### 2. Verificar Configuracion
 
-1. Ve a [Google AI Studio](https://aistudio.google.com/)
-2. Crea una nueva API key
-3. Copia la API key y pégala en tu archivo `.env`
-
-### 3. Verificar Configuración
-
-Después de configurar las variables, ejecuta:
+Ejecuta:
 
 ```bash
 npm run dev
 ```
 
-## 🚀 Usuario de Desarrollo
+Levanta:
+- Frontend en `http://localhost:5173`
+- Backend en `http://localhost:3000`
 
-La aplicación viene configurada con un usuario de desarrollo:
+## Estructura de Base de Datos
 
-- **Email:** tuwebai@gmail.com
-- **Contraseña:** hola123
+El script de Supabase crea las tablas:
 
-Este usuario se crea automáticamente y no requiere registro.
+- `users`
+- `user_profiles`
+- `messages`
+- `posts`
+- `likes`
+- `comments`
+- `notifications`
+- `follows`
+- `detox_goals`
+- `usage_stats`
+- `app_settings`
 
-## 📊 Estructura de Base de Datos
+## Seguridad
 
-El script de Supabase crea las siguientes tablas:
+- Todas las tablas tienen Row Level Security (RLS) habilitado.
+- Las politicas de seguridad limitan acceso por usuario autenticado.
 
-- `users` - Información de usuarios
-- `user_profiles` - Perfiles extendidos
-- `messages` - Mensajes entre usuarios
-- `posts` - Publicaciones/contenido
-- `likes` - Likes en publicaciones
-- `comments` - Comentarios
-- `notifications` - Notificaciones
-- `follows` - Seguimiento entre usuarios
-- `detox_goals` - Metas de desintoxicación
-- `usage_stats` - Estadísticas de uso
-- `app_settings` - Configuraciones de la app
+## Solucion de Problemas
 
-## 🔒 Seguridad
+### Error de conexion a Supabase
 
-- Todas las tablas tienen Row Level Security (RLS) habilitado
-- Las políticas de seguridad están configuradas para proteger los datos
-- Los usuarios solo pueden acceder a sus propios datos
+- Verifica `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY`.
+- Confirma que el proyecto de Supabase este activo.
+- Revisa dominios permitidos en Supabase Auth.
 
-## 🐛 Solución de Problemas
+### Error de autenticacion
 
-### Error: "Usando modo de demostración"
-- Verifica que `GEMINI_API_KEY` esté configurada correctamente
-- Asegúrate de que no haya espacios extra en la variable
-- Reinicia el servidor después de cambiar las variables
-
-### Error de conexión a Supabase
-- Verifica que `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` estén correctas
-- Asegúrate de que el proyecto de Supabase esté activo
-- Verifica que las URLs permitidas incluyan tu dominio local
-
-### Error de autenticación
-- Verifica que el usuario de desarrollo esté creado en Supabase
-- Asegúrate de que las políticas de RLS estén configuradas correctamente
+- Verifica que Email/Password este habilitado en Supabase Auth.
+- Valida las politicas RLS cargadas en la base.

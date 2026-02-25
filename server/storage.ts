@@ -1,38 +1,39 @@
-import { users, type User, type InsertUser } from "@shared/schema";
+import type { InsertProfile, Profile } from "@shared/schema";
 
-// modify the interface with any CRUD methods
-// you might need
-
+// Storage interface minima de ejemplo; la app hoy usa Supabase directo en frontend.
 export interface IStorage {
-  getUser(id: number): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
+  getProfile(id: string): Promise<Profile | undefined>;
+  getProfileByUsername(username: string): Promise<Profile | undefined>;
+  createProfile(profile: InsertProfile): Promise<Profile>;
 }
 
 export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  currentId: number;
+  private profiles = new Map<string, Profile>();
 
-  constructor() {
-    this.users = new Map();
-    this.currentId = 1;
+  async getProfile(id: string): Promise<Profile | undefined> {
+    return this.profiles.get(id);
   }
 
-  async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+  async getProfileByUsername(username: string): Promise<Profile | undefined> {
+    return Array.from(this.profiles.values()).find((profile) => profile.username === username);
   }
 
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
+  async createProfile(insertProfile: InsertProfile): Promise<Profile> {
+    const profile: Profile = {
+      ...insertProfile,
+      fullName: insertProfile.fullName ?? null,
+      avatarUrl: insertProfile.avatarUrl ?? null,
+      bio: insertProfile.bio ?? null,
+      isPrivate: insertProfile.isPrivate ?? false,
+      dailyLimitMinutes: insertProfile.dailyLimitMinutes ?? 90,
+      quietHoursStart: insertProfile.quietHoursStart ?? null,
+      quietHoursEnd: insertProfile.quietHoursEnd ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
 
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    this.profiles.set(profile.id, profile);
+    return profile;
   }
 }
 

@@ -43,7 +43,6 @@ export const NAVIGATION_ITEMS = [
   { name: "Mensajes", icon: "message-circle", path: "/mensajes" },
   { name: "Notificaciones", icon: "bell", path: "/notificaciones" },
   { name: "Crear", icon: "plus-circle", path: "/crear" },
-  { name: "AURA", icon: "sparkles", path: "/aura" },
   { name: "Perfil", icon: "user", path: "/perfil" },
   { name: "Más", icon: "more-horizontal", path: "/mas" }
 ];
@@ -63,20 +62,3 @@ export const UPCOMING_UPDATES = [
   }
 ];
 
-export const FRIENDS_IN_DETOX = [
-  {
-    name: "Carlos M.",
-    days: 42,
-    avatar: "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=400&auto=format&fit=crop&q=60&ixlib=rb-4.0.3"
-  },
-  {
-    name: "Ana P.",
-    days: 103,
-    avatar: "https://images.unsplash.com/photo-1489424731084-a5d8b219a5bb?w=400&auto=format&fit=crop&q=60&ixlib=rb-4.0.3"
-  },
-  {
-    name: "Miguel L.",
-    days: 29,
-    avatar: "https://images.unsplash.com/photo-1463453091185-61582044d556?w=400&auto=format&fit=crop&q=60&ixlib=rb-4.0.3"
-  }
-];

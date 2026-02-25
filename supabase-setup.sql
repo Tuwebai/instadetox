@@ -1,538 +1,518 @@
 -- =====================================================
--- SCRIPT COMPLETO PARA CONFIGURAR INSTADETOX EN SUPABASE
--- =====================================================
--- Ejecutar este script en el SQL Editor de Supabase
--- para crear toda la estructura de base de datos necesaria
-
--- =====================================================
--- 1. HABILITAR EXTENSIONES NECESARIAS
+-- INSTADETOX - SUPABASE SETUP (DESDE CERO)
+-- Fecha: 2026-02-25
+-- Ejecutar completo en SQL Editor de Supabase
 -- =====================================================
 
--- Habilitar UUID extension
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- -----------------------------------------------------
+-- 1) Extensiones
+-- -----------------------------------------------------
+create extension if not exists pgcrypto;
 
--- Habilitar RLS (Row Level Security)
--- (Ya está habilitado por defecto en Supabase)
+-- -----------------------------------------------------
+-- 2) Tipos
+-- -----------------------------------------------------
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'post_type_enum') then
+    create type public.post_type_enum as enum ('reflection', 'goal', 'milestone', 'quote', 'photo', 'video');
+  end if;
 
--- =====================================================
--- 2. CREAR TABLAS PRINCIPALES
--- =====================================================
+  if not exists (select 1 from pg_type where typname = 'notification_type_enum') then
+    create type public.notification_type_enum as enum ('like', 'comment', 'follow', 'message', 'system', 'goal_reminder');
+  end if;
 
--- Tabla de usuarios
-CREATE TABLE IF NOT EXISTS public.users (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    full_name VARCHAR(100),
-    avatar_url TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    last_seen TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    online BOOLEAN DEFAULT false,
-    is_active BOOLEAN DEFAULT true
+  if not exists (select 1 from pg_type where typname = 'goal_status_enum') then
+    create type public.goal_status_enum as enum ('active', 'paused', 'completed', 'archived');
+  end if;
+end $$;
+
+-- -----------------------------------------------------
+-- 3) Tablas base (auth.users es fuente de identidad)
+-- -----------------------------------------------------
+create table if not exists public.profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  username text unique not null check (char_length(username) between 3 and 30),
+  full_name text,
+  avatar_url text,
+  bio text,
+  is_private boolean not null default false,
+  daily_limit_minutes integer not null default 90,
+  quiet_hours_start time,
+  quiet_hours_end time,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- Tabla de perfiles de usuario (información adicional)
-CREATE TABLE IF NOT EXISTS public.user_profiles (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    bio TEXT,
-    website TEXT,
-    location VARCHAR(100),
-    detox_goal TEXT,
-    daily_screen_time INTEGER DEFAULT 0, -- en minutos
-    preferred_theme VARCHAR(20) DEFAULT 'dark',
-    notifications_enabled BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+create table if not exists public.follows (
+  follower_id uuid not null references public.profiles(id) on delete cascade,
+  following_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (follower_id, following_id),
+  constraint follows_no_self check (follower_id <> following_id)
 );
 
--- Tabla de mensajes
-CREATE TABLE IF NOT EXISTS public.messages (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    sender_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    receiver_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
-    message_type VARCHAR(20) DEFAULT 'text', -- text, image, file, etc.
-    is_read BOOLEAN DEFAULT false,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+create table if not exists public.posts (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  type public.post_type_enum not null default 'reflection',
+  title text,
+  caption text not null,
+  media_url text,
+  is_published boolean not null default true,
+  likes_count integer not null default 0,
+  comments_count integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- Tabla de publicaciones/contenido
-CREATE TABLE IF NOT EXISTS public.posts (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    title VARCHAR(200),
-    content TEXT NOT NULL,
-    post_type VARCHAR(20) DEFAULT 'text', -- text, image, video, quote, etc.
-    media_url TEXT,
-    likes_count INTEGER DEFAULT 0,
-    comments_count INTEGER DEFAULT 0,
-    is_published BOOLEAN DEFAULT true,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+create table if not exists public.post_likes (
+  post_id uuid not null references public.posts(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (post_id, user_id)
 );
 
--- Tabla de likes
-CREATE TABLE IF NOT EXISTS public.likes (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(user_id, post_id)
+create table if not exists public.post_comments (
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.posts(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  parent_id uuid references public.post_comments(id) on delete cascade,
+  content text not null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- Tabla de comentarios
-CREATE TABLE IF NOT EXISTS public.comments (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
-    parent_id UUID REFERENCES public.comments(id) ON DELETE CASCADE, -- para respuestas
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+create table if not exists public.saved_posts (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  post_id uuid not null references public.posts(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (user_id, post_id)
 );
 
--- Tabla de notificaciones
-CREATE TABLE IF NOT EXISTS public.notifications (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    type VARCHAR(50) NOT NULL, -- like, comment, message, follow, etc.
-    title VARCHAR(200) NOT NULL,
-    content TEXT,
-    is_read BOOLEAN DEFAULT false,
-    related_user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    related_post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+create table if not exists public.conversations (
+  id uuid primary key default gen_random_uuid(),
+  is_group boolean not null default false,
+  title text,
+  created_by uuid not null references public.profiles(id) on delete restrict,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- Tabla de seguimiento (follows)
-CREATE TABLE IF NOT EXISTS public.follows (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    follower_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    following_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(follower_id, following_id)
+create table if not exists public.conversation_participants (
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  joined_at timestamptz not null default now(),
+  muted_until timestamptz,
+  primary key (conversation_id, user_id)
 );
 
--- Tabla de metas de desintoxicación
-CREATE TABLE IF NOT EXISTS public.detox_goals (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    title VARCHAR(200) NOT NULL,
-    description TEXT,
-    goal_type VARCHAR(50) NOT NULL, -- screen_time, app_usage, meditation, etc.
-    target_value INTEGER, -- valor objetivo (minutos, días, etc.)
-    current_value INTEGER DEFAULT 0, -- valor actual
-    unit VARCHAR(20), -- minutos, días, veces, etc.
-    is_completed BOOLEAN DEFAULT false,
-    start_date DATE,
-    end_date DATE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+create table if not exists public.messages (
+  id uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.conversations(id) on delete cascade,
+  sender_id uuid not null references public.profiles(id) on delete cascade,
+  body text not null,
+  media_url text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- Tabla de estadísticas de uso
-CREATE TABLE IF NOT EXISTS public.usage_stats (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    date DATE NOT NULL,
-    screen_time_minutes INTEGER DEFAULT 0,
-    apps_used INTEGER DEFAULT 0,
-    notifications_received INTEGER DEFAULT 0,
-    posts_created INTEGER DEFAULT 0,
-    messages_sent INTEGER DEFAULT 0,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(user_id, date)
+create table if not exists public.message_reads (
+  message_id uuid not null references public.messages(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  read_at timestamptz not null default now(),
+  primary key (message_id, user_id)
 );
 
--- Tabla de configuraciones de la app
-CREATE TABLE IF NOT EXISTS public.app_settings (
-    id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-    setting_key VARCHAR(100) NOT NULL,
-    setting_value TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(user_id, setting_key)
+create table if not exists public.notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  actor_id uuid references public.profiles(id) on delete set null,
+  type public.notification_type_enum not null,
+  title text not null,
+  body text,
+  post_id uuid references public.posts(id) on delete cascade,
+  is_read boolean not null default false,
+  created_at timestamptz not null default now()
 );
 
--- =====================================================
--- 3. CREAR ÍNDICES PARA OPTIMIZACIÓN
--- =====================================================
-
--- Índices para usuarios
-CREATE INDEX IF NOT EXISTS idx_users_email ON public.users(email);
-CREATE INDEX IF NOT EXISTS idx_users_username ON public.users(username);
-CREATE INDEX IF NOT EXISTS idx_users_online ON public.users(online);
-
--- Índices para mensajes
-CREATE INDEX IF NOT EXISTS idx_messages_sender ON public.messages(sender_id);
-CREATE INDEX IF NOT EXISTS idx_messages_receiver ON public.messages(receiver_id);
-CREATE INDEX IF NOT EXISTS idx_messages_created_at ON public.messages(created_at);
-CREATE INDEX IF NOT EXISTS idx_messages_conversation ON public.messages(sender_id, receiver_id, created_at);
-
--- Índices para posts
-CREATE INDEX IF NOT EXISTS idx_posts_user ON public.posts(user_id);
-CREATE INDEX IF NOT EXISTS idx_posts_created_at ON public.posts(created_at);
-CREATE INDEX IF NOT EXISTS idx_posts_published ON public.posts(is_published, created_at);
-
--- Índices para likes
-CREATE INDEX IF NOT EXISTS idx_likes_user ON public.likes(user_id);
-CREATE INDEX IF NOT EXISTS idx_likes_post ON public.likes(post_id);
-
--- Índices para comentarios
-CREATE INDEX IF NOT EXISTS idx_comments_user ON public.comments(user_id);
-CREATE INDEX IF NOT EXISTS idx_comments_post ON public.comments(post_id);
-CREATE INDEX IF NOT EXISTS idx_comments_parent ON public.comments(parent_id);
-
--- Índices para notificaciones
-CREATE INDEX IF NOT EXISTS idx_notifications_user ON public.notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_read ON public.notifications(is_read);
-CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON public.notifications(created_at);
-
--- Índices para follows
-CREATE INDEX IF NOT EXISTS idx_follows_follower ON public.follows(follower_id);
-CREATE INDEX IF NOT EXISTS idx_follows_following ON public.follows(following_id);
-
--- Índices para metas de desintoxicación
-CREATE INDEX IF NOT EXISTS idx_detox_goals_user ON public.detox_goals(user_id);
-CREATE INDEX IF NOT EXISTS idx_detox_goals_completed ON public.detox_goals(is_completed);
-
--- Índices para estadísticas
-CREATE INDEX IF NOT EXISTS idx_usage_stats_user_date ON public.usage_stats(user_id, date);
-
--- =====================================================
--- 4. CONFIGURAR ROW LEVEL SECURITY (RLS)
--- =====================================================
-
--- Habilitar RLS en todas las tablas
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.likes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.follows ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.detox_goals ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.usage_stats ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.app_settings ENABLE ROW LEVEL SECURITY;
-
--- Políticas para usuarios
-CREATE POLICY "Users can view all profiles" ON public.users
-    FOR SELECT USING (true);
-
-CREATE POLICY "Users can update own profile" ON public.users
-    FOR UPDATE USING (auth.uid() = id);
-
--- Políticas para perfiles de usuario
-CREATE POLICY "Users can view all profiles" ON public.user_profiles
-    FOR SELECT USING (true);
-
-CREATE POLICY "Users can update own profile" ON public.user_profiles
-    FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own profile" ON public.user_profiles
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- Políticas para mensajes
-CREATE POLICY "Users can view own messages" ON public.messages
-    FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-
-CREATE POLICY "Users can send messages" ON public.messages
-    FOR INSERT WITH CHECK (auth.uid() = sender_id);
-
-CREATE POLICY "Users can update own messages" ON public.messages
-    FOR UPDATE USING (auth.uid() = sender_id);
-
--- Políticas para posts
-CREATE POLICY "Users can view all published posts" ON public.posts
-    FOR SELECT USING (is_published = true);
-
-CREATE POLICY "Users can create posts" ON public.posts
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own posts" ON public.posts
-    FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete own posts" ON public.posts
-    FOR DELETE USING (auth.uid() = user_id);
-
--- Políticas para likes
-CREATE POLICY "Users can view all likes" ON public.likes
-    FOR SELECT USING (true);
-
-CREATE POLICY "Users can create likes" ON public.likes
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete own likes" ON public.likes
-    FOR DELETE USING (auth.uid() = user_id);
-
--- Políticas para comentarios
-CREATE POLICY "Users can view all comments" ON public.comments
-    FOR SELECT USING (true);
-
-CREATE POLICY "Users can create comments" ON public.comments
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own comments" ON public.comments
-    FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete own comments" ON public.comments
-    FOR DELETE USING (auth.uid() = user_id);
-
--- Políticas para notificaciones
-CREATE POLICY "Users can view own notifications" ON public.notifications
-    FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own notifications" ON public.notifications
-    FOR UPDATE USING (auth.uid() = user_id);
-
--- Políticas para follows
-CREATE POLICY "Users can view all follows" ON public.follows
-    FOR SELECT USING (true);
-
-CREATE POLICY "Users can create follows" ON public.follows
-    FOR INSERT WITH CHECK (auth.uid() = follower_id);
-
-CREATE POLICY "Users can delete own follows" ON public.follows
-    FOR DELETE USING (auth.uid() = follower_id);
-
--- Políticas para metas de desintoxicación
-CREATE POLICY "Users can view own goals" ON public.detox_goals
-    FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can create goals" ON public.detox_goals
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own goals" ON public.detox_goals
-    FOR UPDATE USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can delete own goals" ON public.detox_goals
-    FOR DELETE USING (auth.uid() = user_id);
-
--- Políticas para estadísticas
-CREATE POLICY "Users can view own stats" ON public.usage_stats
-    FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can create stats" ON public.usage_stats
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own stats" ON public.usage_stats
-    FOR UPDATE USING (auth.uid() = user_id);
-
--- Políticas para configuraciones
-CREATE POLICY "Users can view own settings" ON public.app_settings
-    FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can create settings" ON public.app_settings
-    FOR INSERT WITH CHECK (auth.uid() = user_id);
-
-CREATE POLICY "Users can update own settings" ON public.app_settings
-    FOR UPDATE USING (auth.uid() = user_id);
-
--- =====================================================
--- 5. CREAR FUNCIONES ÚTILES
--- =====================================================
-
--- Función para actualizar updated_at automáticamente
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Triggers para updated_at
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON public.users
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_user_profiles_updated_at BEFORE UPDATE ON public.user_profiles
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_messages_updated_at BEFORE UPDATE ON public.messages
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_posts_updated_at BEFORE UPDATE ON public.posts
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_comments_updated_at BEFORE UPDATE ON public.comments
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_detox_goals_updated_at BEFORE UPDATE ON public.detox_goals
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_app_settings_updated_at BEFORE UPDATE ON public.app_settings
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Función para actualizar contadores de likes
-CREATE OR REPLACE FUNCTION update_likes_count()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        UPDATE public.posts SET likes_count = likes_count + 1 WHERE id = NEW.post_id;
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        UPDATE public.posts SET likes_count = likes_count - 1 WHERE id = OLD.post_id;
-        RETURN OLD;
-    END IF;
-    RETURN NULL;
-END;
-$$ language 'plpgsql';
-
--- Trigger para actualizar contadores de likes
-CREATE TRIGGER update_likes_count_trigger
-    AFTER INSERT OR DELETE ON public.likes
-    FOR EACH ROW EXECUTE FUNCTION update_likes_count();
-
--- Función para actualizar contadores de comentarios
-CREATE OR REPLACE FUNCTION update_comments_count()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF TG_OP = 'INSERT' THEN
-        UPDATE public.posts SET comments_count = comments_count + 1 WHERE id = NEW.post_id;
-        RETURN NEW;
-    ELSIF TG_OP = 'DELETE' THEN
-        UPDATE public.posts SET comments_count = comments_count - 1 WHERE id = OLD.post_id;
-        RETURN OLD;
-    END IF;
-    RETURN NULL;
-END;
-$$ language 'plpgsql';
-
--- Trigger para actualizar contadores de comentarios
-CREATE TRIGGER update_comments_count_trigger
-    AFTER INSERT OR DELETE ON public.comments
-    FOR EACH ROW EXECUTE FUNCTION update_comments_count();
-
--- =====================================================
--- 6. INSERTAR DATOS DE PRUEBA
--- =====================================================
-
--- Insertar usuario de desarrollo
-INSERT INTO public.users (id, email, username, full_name, avatar_url, online, is_active)
-VALUES (
-    'tuwebai-user-001',
-    'tuwebai@gmail.com',
-    'tuwebai',
-    'TuWebAI Developer',
-    'https://i.pravatar.cc/150?img=1',
-    true,
-    true
-) ON CONFLICT (id) DO UPDATE SET
-    email = EXCLUDED.email,
-    username = EXCLUDED.username,
-    full_name = EXCLUDED.full_name,
-    avatar_url = EXCLUDED.avatar_url,
-    online = EXCLUDED.online,
-    is_active = EXCLUDED.is_active;
-
--- Insertar perfil del usuario
-INSERT INTO public.user_profiles (user_id, bio, detox_goal, daily_screen_time, preferred_theme)
-VALUES (
-    'tuwebai-user-001',
-    'Desarrollador de InstaDetox - Aplicación para el bienestar digital',
-    'Reducir el tiempo en redes sociales y aumentar la productividad',
-    120, -- 2 horas
-    'dark'
-) ON CONFLICT (user_id) DO UPDATE SET
-    bio = EXCLUDED.bio,
-    detox_goal = EXCLUDED.detox_goal,
-    daily_screen_time = EXCLUDED.daily_screen_time,
-    preferred_theme = EXCLUDED.preferred_theme;
-
--- Insertar algunas metas de desintoxicación de ejemplo
-INSERT INTO public.detox_goals (user_id, title, description, goal_type, target_value, current_value, unit, start_date, end_date)
-VALUES 
-    (
-        'tuwebai-user-001',
-        'Reducir tiempo en Instagram',
-        'Limitar el uso de Instagram a 30 minutos por día',
-        'app_usage',
-        30,
-        15,
-        'minutos',
-        CURRENT_DATE,
-        CURRENT_DATE + INTERVAL '30 days'
-    ),
-    (
-        'tuwebai-user-001',
-        'Meditación diaria',
-        'Practicar meditación 10 minutos cada día',
-        'meditation',
-        10,
-        5,
-        'minutos',
-        CURRENT_DATE,
-        CURRENT_DATE + INTERVAL '30 days'
-    ),
-    (
-        'tuwebai-user-001',
-        'Tiempo de pantalla total',
-        'Mantener el tiempo total de pantalla bajo 4 horas por día',
-        'screen_time',
-        240,
-        180,
-        'minutos',
-        CURRENT_DATE,
-        CURRENT_DATE + INTERVAL '30 days'
-    );
-
--- Insertar algunas publicaciones de ejemplo
-INSERT INTO public.posts (user_id, title, content, post_type, likes_count, comments_count)
-VALUES 
-    (
-        'tuwebai-user-001',
-        'Mi primer día de desintoxicación digital',
-        'Hoy comencé mi viaje hacia un uso más consciente de la tecnología. Me siento motivado y listo para el cambio! 🌱',
-        'text',
-        0,
-        0
-    ),
-    (
-        'tuwebai-user-001',
-        'Consejo del día',
-        'Desactiva las notificaciones de redes sociales durante las horas de trabajo. Tu productividad te lo agradecerá! 💡',
-        'text',
-        0,
-        0
-    );
-
--- =====================================================
--- 7. CONFIGURAR WEBHOOKS (OPCIONAL)
--- =====================================================
-
--- Nota: Los webhooks se configuran desde el dashboard de Supabase
--- Para notificaciones en tiempo real, usar Supabase Realtime
-
--- =====================================================
--- 8. VERIFICAR CONFIGURACIÓN
--- =====================================================
-
--- Verificar que las tablas se crearon correctamente
-SELECT table_name, table_type 
-FROM information_schema.tables 
-WHERE table_schema = 'public' 
-AND table_name IN ('users', 'user_profiles', 'messages', 'posts', 'likes', 'comments', 'notifications', 'follows', 'detox_goals', 'usage_stats', 'app_settings')
-ORDER BY table_name;
-
--- Verificar que el usuario de prueba se insertó
-SELECT id, email, username, full_name, online 
-FROM public.users 
-WHERE email = 'tuwebai@gmail.com';
-
--- =====================================================
--- FIN DEL SCRIPT
--- =====================================================
-
--- IMPORTANTE: Después de ejecutar este script:
--- 1. Ve a Authentication > Settings en el dashboard de Supabase
--- 2. Configura las URLs permitidas para tu aplicación
--- 3. Configura las variables de entorno en tu .env:
---    - VITE_SUPABASE_URL=tu_url_de_supabase
---    - VITE_SUPABASE_ANON_KEY=tu_anon_key
--- 4. Configura la autenticación por email si es necesario
--- 5. Prueba la conexión desde tu aplicación
+create table if not exists public.detox_goals (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  title text not null,
+  description text,
+  target_minutes integer,
+  current_minutes integer not null default 0,
+  status public.goal_status_enum not null default 'active',
+  starts_on date,
+  ends_on date,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.usage_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  event_name text not null,
+  event_payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+-- -----------------------------------------------------
+-- 4) �ndices
+-- -----------------------------------------------------
+create index if not exists idx_profiles_username on public.profiles(username);
+create index if not exists idx_posts_user_created on public.posts(user_id, created_at desc);
+create index if not exists idx_posts_created on public.posts(created_at desc);
+create index if not exists idx_post_comments_post_created on public.post_comments(post_id, created_at desc);
+create index if not exists idx_notifications_user_created on public.notifications(user_id, created_at desc);
+create index if not exists idx_messages_conversation_created on public.messages(conversation_id, created_at desc);
+create index if not exists idx_usage_events_user_created on public.usage_events(user_id, created_at desc);
+
+-- -----------------------------------------------------
+-- 5) Helpers y triggers
+-- -----------------------------------------------------
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create or replace function public.handle_new_auth_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  base_username text;
+begin
+  base_username := coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1));
+
+  insert into public.profiles (id, username, full_name, avatar_url)
+  values (
+    new.id,
+    left(regexp_replace(lower(base_username), '[^a-z0-9_]', '', 'g'), 30),
+    coalesce(new.raw_user_meta_data->>'full_name', ''),
+    new.raw_user_meta_data->>'avatar_url'
+  )
+  on conflict (id) do nothing;
+
+  return new;
+end;
+$$;
+
+create or replace function public.apply_post_counts()
+returns trigger
+language plpgsql
+as $$
+begin
+  if tg_table_name = 'post_likes' then
+    if tg_op = 'INSERT' then
+      update public.posts set likes_count = likes_count + 1 where id = new.post_id;
+      return new;
+    elsif tg_op = 'DELETE' then
+      update public.posts set likes_count = greatest(likes_count - 1, 0) where id = old.post_id;
+      return old;
+    end if;
+  elsif tg_table_name = 'post_comments' then
+    if tg_op = 'INSERT' then
+      update public.posts set comments_count = comments_count + 1 where id = new.post_id;
+      return new;
+    elsif tg_op = 'DELETE' then
+      update public.posts set comments_count = greatest(comments_count - 1, 0) where id = old.post_id;
+      return old;
+    end if;
+  end if;
+
+  return null;
+end;
+$$;
+
+drop trigger if exists trg_profiles_updated_at on public.profiles;
+create trigger trg_profiles_updated_at before update on public.profiles
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_posts_updated_at on public.posts;
+create trigger trg_posts_updated_at before update on public.posts
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_post_comments_updated_at on public.post_comments;
+create trigger trg_post_comments_updated_at before update on public.post_comments
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_messages_updated_at on public.messages;
+create trigger trg_messages_updated_at before update on public.messages
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_conversations_updated_at on public.conversations;
+create trigger trg_conversations_updated_at before update on public.conversations
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_detox_goals_updated_at on public.detox_goals;
+create trigger trg_detox_goals_updated_at before update on public.detox_goals
+for each row execute function public.set_updated_at();
+
+drop trigger if exists trg_auth_user_created on auth.users;
+create trigger trg_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_auth_user();
+
+drop trigger if exists trg_post_likes_counts on public.post_likes;
+create trigger trg_post_likes_counts
+after insert or delete on public.post_likes
+for each row execute function public.apply_post_counts();
+
+drop trigger if exists trg_post_comments_counts on public.post_comments;
+create trigger trg_post_comments_counts
+after insert or delete on public.post_comments
+for each row execute function public.apply_post_counts();
+
+-- -----------------------------------------------------
+-- 6) RLS + pol�ticas
+-- -----------------------------------------------------
+alter table public.profiles enable row level security;
+alter table public.follows enable row level security;
+alter table public.posts enable row level security;
+alter table public.post_likes enable row level security;
+alter table public.post_comments enable row level security;
+alter table public.saved_posts enable row level security;
+alter table public.conversations enable row level security;
+alter table public.conversation_participants enable row level security;
+alter table public.messages enable row level security;
+alter table public.message_reads enable row level security;
+alter table public.notifications enable row level security;
+alter table public.detox_goals enable row level security;
+alter table public.usage_events enable row level security;
+
+-- profiles
+drop policy if exists "profiles_select_public" on public.profiles;
+create policy "profiles_select_public" on public.profiles
+for select using (true);
+
+drop policy if exists "profiles_insert_self" on public.profiles;
+create policy "profiles_insert_self" on public.profiles
+for insert with check (auth.uid() = id);
+
+drop policy if exists "profiles_update_self" on public.profiles;
+create policy "profiles_update_self" on public.profiles
+for update using (auth.uid() = id);
+
+-- follows
+drop policy if exists "follows_select_public" on public.follows;
+create policy "follows_select_public" on public.follows
+for select using (true);
+
+drop policy if exists "follows_insert_self" on public.follows;
+create policy "follows_insert_self" on public.follows
+for insert with check (auth.uid() = follower_id);
+
+drop policy if exists "follows_delete_self" on public.follows;
+create policy "follows_delete_self" on public.follows
+for delete using (auth.uid() = follower_id);
+
+-- posts
+drop policy if exists "posts_select_published" on public.posts;
+create policy "posts_select_published" on public.posts
+for select using (is_published = true or auth.uid() = user_id);
+
+drop policy if exists "posts_insert_self" on public.posts;
+create policy "posts_insert_self" on public.posts
+for insert with check (auth.uid() = user_id);
+
+drop policy if exists "posts_update_self" on public.posts;
+create policy "posts_update_self" on public.posts
+for update using (auth.uid() = user_id);
+
+drop policy if exists "posts_delete_self" on public.posts;
+create policy "posts_delete_self" on public.posts
+for delete using (auth.uid() = user_id);
+
+-- likes
+drop policy if exists "likes_select_public" on public.post_likes;
+create policy "likes_select_public" on public.post_likes
+for select using (true);
+
+drop policy if exists "likes_insert_self" on public.post_likes;
+create policy "likes_insert_self" on public.post_likes
+for insert with check (auth.uid() = user_id);
+
+drop policy if exists "likes_delete_self" on public.post_likes;
+create policy "likes_delete_self" on public.post_likes
+for delete using (auth.uid() = user_id);
+
+-- comments
+drop policy if exists "comments_select_public" on public.post_comments;
+create policy "comments_select_public" on public.post_comments
+for select using (true);
+
+drop policy if exists "comments_insert_self" on public.post_comments;
+create policy "comments_insert_self" on public.post_comments
+for insert with check (auth.uid() = user_id);
+
+drop policy if exists "comments_update_self" on public.post_comments;
+create policy "comments_update_self" on public.post_comments
+for update using (auth.uid() = user_id);
+
+drop policy if exists "comments_delete_self" on public.post_comments;
+create policy "comments_delete_self" on public.post_comments
+for delete using (auth.uid() = user_id);
+
+-- saved posts
+drop policy if exists "saved_select_self" on public.saved_posts;
+create policy "saved_select_self" on public.saved_posts
+for select using (auth.uid() = user_id);
+
+drop policy if exists "saved_insert_self" on public.saved_posts;
+create policy "saved_insert_self" on public.saved_posts
+for insert with check (auth.uid() = user_id);
+
+drop policy if exists "saved_delete_self" on public.saved_posts;
+create policy "saved_delete_self" on public.saved_posts
+for delete using (auth.uid() = user_id);
+
+-- conversations
+drop policy if exists "conversations_select_participant" on public.conversations;
+create policy "conversations_select_participant" on public.conversations
+for select using (
+  exists (
+    select 1
+    from public.conversation_participants cp
+    where cp.conversation_id = conversations.id
+      and cp.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "conversations_insert_authenticated" on public.conversations;
+create policy "conversations_insert_authenticated" on public.conversations
+for insert with check (auth.uid() = created_by);
+
+drop policy if exists "conversations_update_creator" on public.conversations;
+create policy "conversations_update_creator" on public.conversations
+for update using (auth.uid() = created_by);
+
+-- conversation participants
+drop policy if exists "participants_select_participant" on public.conversation_participants;
+create policy "participants_select_participant" on public.conversation_participants
+for select using (
+  auth.uid() = user_id
+  or exists (
+    select 1
+    from public.conversation_participants cp
+    where cp.conversation_id = conversation_participants.conversation_id
+      and cp.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "participants_insert_conversation_member" on public.conversation_participants;
+create policy "participants_insert_conversation_member" on public.conversation_participants
+for insert with check (
+  auth.uid() = user_id
+  or exists (
+    select 1
+    from public.conversation_participants cp
+    where cp.conversation_id = conversation_participants.conversation_id
+      and cp.user_id = auth.uid()
+  )
+);
+
+-- messages
+drop policy if exists "messages_select_participant" on public.messages;
+create policy "messages_select_participant" on public.messages
+for select using (
+  exists (
+    select 1
+    from public.conversation_participants cp
+    where cp.conversation_id = messages.conversation_id
+      and cp.user_id = auth.uid()
+  )
+);
+
+drop policy if exists "messages_insert_sender_participant" on public.messages;
+create policy "messages_insert_sender_participant" on public.messages
+for insert with check (
+  auth.uid() = sender_id
+  and exists (
+    select 1
+    from public.conversation_participants cp
+    where cp.conversation_id = messages.conversation_id
+      and cp.user_id = auth.uid()
+  )
+);
+
+-- message reads
+drop policy if exists "message_reads_select_participant" on public.message_reads;
+create policy "message_reads_select_participant" on public.message_reads
+for select using (auth.uid() = user_id);
+
+drop policy if exists "message_reads_insert_self" on public.message_reads;
+create policy "message_reads_insert_self" on public.message_reads
+for insert with check (auth.uid() = user_id);
+
+-- notifications
+drop policy if exists "notifications_select_self" on public.notifications;
+create policy "notifications_select_self" on public.notifications
+for select using (auth.uid() = user_id);
+
+drop policy if exists "notifications_update_self" on public.notifications;
+create policy "notifications_update_self" on public.notifications
+for update using (auth.uid() = user_id);
+
+-- detox goals
+drop policy if exists "goals_select_self" on public.detox_goals;
+create policy "goals_select_self" on public.detox_goals
+for select using (auth.uid() = user_id);
+
+drop policy if exists "goals_insert_self" on public.detox_goals;
+create policy "goals_insert_self" on public.detox_goals
+for insert with check (auth.uid() = user_id);
+
+drop policy if exists "goals_update_self" on public.detox_goals;
+create policy "goals_update_self" on public.detox_goals
+for update using (auth.uid() = user_id);
+
+drop policy if exists "goals_delete_self" on public.detox_goals;
+create policy "goals_delete_self" on public.detox_goals
+for delete using (auth.uid() = user_id);
+
+-- usage events
+drop policy if exists "usage_events_select_self" on public.usage_events;
+create policy "usage_events_select_self" on public.usage_events
+for select using (auth.uid() = user_id);
+
+drop policy if exists "usage_events_insert_self" on public.usage_events;
+create policy "usage_events_insert_self" on public.usage_events
+for insert with check (auth.uid() = user_id);
+
+-- -----------------------------------------------------
+-- 7) Vista �til para feed (opcional)
+-- -----------------------------------------------------
+create or replace view public.feed_posts as
+select
+  p.id,
+  p.user_id,
+  p.type,
+  p.title,
+  p.caption,
+  p.media_url,
+  p.likes_count,
+  p.comments_count,
+  p.created_at,
+  pr.username,
+  pr.full_name,
+  pr.avatar_url
+from public.posts p
+join public.profiles pr on pr.id = p.user_id
+where p.is_published = true;
+
+-- -----------------------------------------------------
+-- 8) Verificaci�n r�pida
+-- -----------------------------------------------------
+-- select * from public.profiles limit 5;
+-- select * from public.feed_posts order by created_at desc limit 20;
+
+-- FIN
