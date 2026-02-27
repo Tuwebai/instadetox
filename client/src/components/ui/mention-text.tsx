@@ -3,11 +3,17 @@ import { Link } from "wouter";
 interface MentionTextProps {
   text: string;
   mentionClassName?: string;
+  hashtagClassName?: string;
 }
 
 const USERNAME_REGEX = /^[a-z0-9_]{3,30}$/i;
+const HASHTAG_REGEX = /^[a-z0-9_]{1,50}$/i;
 
-const MentionText = ({ text, mentionClassName = "text-cyan-200 hover:text-cyan-100" }: MentionTextProps) => {
+const MentionText = ({
+  text,
+  mentionClassName = "text-cyan-200 hover:text-cyan-100",
+  hashtagClassName = "text-cyan-200 hover:text-cyan-100",
+}: MentionTextProps) => {
   const tokens = text.split(/(\s+)/);
 
   return (
@@ -34,6 +40,21 @@ const MentionText = ({ text, mentionClassName = "text-cyan-200 hover:text-cyan-1
                 {leading}
                 <Link href={`/${username}`} className={mentionClassName}>
                   @{username}
+                </Link>
+                {trailing}
+              </span>
+            );
+          }
+        }
+
+        if (core.startsWith("#")) {
+          const tag = core.slice(1).toLowerCase();
+          if (HASHTAG_REGEX.test(tag)) {
+            return (
+              <span key={`hashtag-${index}`}>
+                {leading}
+                <Link href={`/explore/tags/${tag}`} className={hashtagClassName}>
+                  #{tag}
                 </Link>
                 {trailing}
               </span>

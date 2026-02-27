@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sparkles, Mail, Lock, Eye, EyeOff } from "lucide-react";
+import BrandLogo from "@/components/BrandLogo";
+import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 
 const Login = () => {
   const { signIn, signUp, loading, error } = useAuth();
@@ -41,10 +42,12 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full mb-4">
-            <Sparkles className="h-8 w-8 text-white" />
+          <div className="inline-flex items-center justify-center mb-4">
+            <BrandLogo variant="icon" className="h-20" />
           </div>
-          <h1 className="text-3xl font-bold text-white mb-2">InstaDetox</h1>
+          <h1 className="flex justify-center mb-2">
+            <BrandLogo className="h-14" />
+          </h1>
           <p className="text-gray-300">Tu bienestar digital</p>
         </div>
 

@@ -20,6 +20,7 @@ import { Glass } from "@/components/ui/glass";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import { supabase } from "@/lib/supabase";
+import InstagramMediaPicker from "@/components/create/InstagramMediaPicker";
 
 type ContentType = "reflection" | "quote" | "goal" | "milestone" | "photo" | "video";
 
@@ -40,25 +41,6 @@ interface MentionSuggestion {
   full_name: string | null;
   avatar_url: string | null;
 }
-
-const IMAGE_OPTIONS = [
-  {
-    url: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=60",
-    label: "Playa",
-  },
-  {
-    url: "https://images.unsplash.com/photo-1513682121497-80211f36a7d3?auto=format&fit=crop&w=900&q=60",
-    label: "Bosque",
-  },
-  {
-    url: "https://images.unsplash.com/photo-1473296413359-d232d7ebc9a1?auto=format&fit=crop&w=900&q=60",
-    label: "Minimalismo",
-  },
-  {
-    url: "https://images.unsplash.com/photo-1517021897933-0e0319cfbc28?auto=format&fit=crop&w=900&q=60",
-    label: "Mindfulness",
-  },
-];
 
 const POSTS_MEDIA_BUCKET = (import.meta.env.VITE_SUPABASE_POSTS_BUCKET as string | undefined)?.trim() || "post-media";
 const MAX_MEDIA_PER_POST = 10;
@@ -151,7 +133,6 @@ const Create = () => {
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
   const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [goalDate, setGoalDate] = useState("");
-  const [showImageSelector, setShowImageSelector] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingPosts, setIsLoadingPosts] = useState(true);
   const [posts, setPosts] = useState<UserPost[]>([]);
@@ -215,7 +196,6 @@ const Create = () => {
     setMentionSuggestions([]);
     setVideoCoverUrl(null);
     setGoalDate("");
-    setShowImageSelector(false);
     setEditingPost(null);
     setContentType("reflection");
   };
@@ -345,12 +325,12 @@ const Create = () => {
 
   const validateForm = () => {
     if (contentType !== "photo" && contentType !== "video" && !title.trim()) {
-      toast({ title: "Titulo requerido", description: "Escribe un titulo para tu publicacion." });
+      toast({ title: "Título requerido", description: "Escribe un título para tu publicación." });
       return false;
     }
 
     if (!content.trim()) {
-      toast({ title: "Contenido requerido", description: "Escribe el contenido de tu publicacion." });
+      toast({ title: "Contenido requerido", description: "Escribe el contenido de tu publicación." });
       return false;
     }
 
@@ -365,7 +345,7 @@ const Create = () => {
     }
 
     if (!isSupabaseReady) {
-      toast({ title: "Config pendiente", description: "Configura Supabase y una sesion valida para publicar." });
+      toast({ title: "Config pendiente", description: "Configura Supabase y una sesión válida para publicar." });
       return false;
     }
 
@@ -395,7 +375,7 @@ const Create = () => {
           .eq("user_id", user.id);
 
         if (error) throw error;
-        toast({ title: "Publicacion actualizada", description: "Los cambios fueron guardados." });
+        toast({ title: "Publicación actualizada", description: "Los cambios fueron guardados." });
         await loadPosts();
       } else {
         const { error } = await supabase.from("posts").insert({
@@ -415,7 +395,7 @@ const Create = () => {
 
       resetForm();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo guardar la publicacion.";
+      const message = error instanceof Error ? error.message : "No se pudo guardar la publicación.";
       toast({ title: "Error", description: message });
     } finally {
       setIsSubmitting(false);
@@ -427,18 +407,18 @@ const Create = () => {
 
     const { error } = await supabase.from("posts").delete().eq("id", postId).eq("user_id", user.id);
     if (error) {
-      toast({ title: "Error", description: "No se pudo eliminar la publicacion." });
+      toast({ title: "Error", description: "No se pudo eliminar la publicación." });
       return;
     }
 
-    toast({ title: "Publicacion eliminada", description: "Se elimino correctamente." });
+    toast({ title: "Publicación eliminada", description: "Se eliminó correctamente." });
     await loadPosts();
   };
 
   const uploadMediaFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     if (!supabase || !user?.id) {
-      toast({ title: "Sesion requerida", description: "Inicia sesion para subir archivos." });
+      toast({ title: "Sesión requerida", description: "Inicia sesión para subir archivos." });
       return;
     }
 
@@ -446,7 +426,7 @@ const Create = () => {
     if (currentCount >= MAX_MEDIA_PER_POST) {
       toast({
         title: "Limite alcanzado",
-        description: `Solo puedes subir hasta ${MAX_MEDIA_PER_POST} archivos por publicacion.`,
+        description: `Solo puedes subir hasta ${MAX_MEDIA_PER_POST} archivos por publicación.`,
       });
       return;
     }
@@ -466,7 +446,7 @@ const Create = () => {
         if (!isImage && !isVideo) {
           toast({
             title: "Formato no soportado",
-            description: `${file.name}: solo imagenes o videos.`,
+            description: `${file.name}: solo imágenes o videos.`,
           });
           continue;
         }
@@ -546,7 +526,7 @@ const Create = () => {
       const { data } = supabase.storage.from(POSTS_MEDIA_BUCKET).getPublicUrl(filePath);
       const url = data.publicUrl || null;
       setVideoCoverUrl(url);
-      toast({ title: "Portada actualizada", description: "Se cargo la portada del video." });
+      toast({ title: "Portada actualizada", description: "Se cargó la portada del video." });
       return url;
     } finally {
       setIsUploadingCover(false);
@@ -557,7 +537,7 @@ const Create = () => {
     const video = coverVideoRef.current;
     if (!video) return;
     if (!video.videoWidth || !video.videoHeight) {
-      toast({ title: "No disponible", description: "El video aun no cargo metadatos." });
+      toast({ title: "No disponible", description: "El video aún no cargó metadatos." });
       return;
     }
 
@@ -623,7 +603,7 @@ const Create = () => {
             isLoadingPosts ? (
               <p className="text-gray-300">Cargando tus publicaciones...</p>
             ) : posts.length === 0 ? (
-              <p className="text-gray-300">Aun no creaste publicaciones.</p>
+              <p className="text-gray-300">Aún no creaste publicaciones.</p>
             ) : (
               <div className="space-y-4 max-h-[500px] overflow-y-auto pr-2">
                 {posts.map((post) => (
@@ -631,7 +611,7 @@ const Create = () => {
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-2">
                         <div className="bg-slate-900/60 p-1.5 rounded-md">{getContentTypeIcon(post.type)}</div>
-                        <h3 className="font-medium text-white">{post.title || "Sin titulo"}</h3>
+                        <h3 className="font-medium text-white">{post.title || "Sin título"}</h3>
                       </div>
                       <div className="flex gap-2">
                         <button
@@ -683,7 +663,7 @@ const Create = () => {
 
               <div className="flex flex-wrap mb-4 bg-black/20 rounded-lg p-1">
                 {([
-                  ["reflection", "Reflexion", MessageCircle],
+                  ["reflection", "Reflexión", MessageCircle],
                   ["quote", "Cita", Quote],
                   ["goal", "Meta", Target],
                   ["milestone", "Logro", Calendar],
@@ -704,251 +684,329 @@ const Create = () => {
               </div>
 
               <div className="space-y-4">
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder={contentType === "photo" || contentType === "video" ? "Titulo opcional" : "Titulo de la publicacion"}
-                  className="frosted w-full rounded-lg p-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"
-                />
-
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Escribe tu contenido..."
-                  className="frosted w-full rounded-lg p-4 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none h-32"
-                />
-
-                <div className="space-y-2">
-                  <label className="text-sm text-gray-300">Menciones</label>
-                  {selectedMentions.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {selectedMentions.map((mention) => (
-                        <button
-                          key={mention}
-                          type="button"
-                          onClick={() => removeMention(mention)}
-                          className="px-2.5 py-1 rounded-full text-xs bg-cyan-500/15 border border-cyan-300/30 text-cyan-200 hover:bg-cyan-500/25"
-                        >
-                          @{mention} <span className="opacity-80">x</span>
-                        </button>
-                      ))}
+                {(contentType === "photo" || contentType === "video") && mediaUrls.length > 0 ? (
+                  <div className="ig-create-editor-shell">
+                    <div className="ig-create-editor-top">
+                      <button
+                        type="button"
+                        className="ig-create-editor-back"
+                        onClick={() => setMediaUrls([])}
+                        aria-label="Volver"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      <h3 className="ig-create-editor-title">Crear nueva publicación</h3>
+                      <button
+                        type="button"
+                        onClick={() => void handleSubmit()}
+                        disabled={isSubmitting}
+                        className="ig-create-editor-share"
+                      >
+                        {isSubmitting ? "Compartiendo..." : "Compartir"}
+                      </button>
                     </div>
-                  ) : null}
 
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={mentionQuery}
-                      onChange={(e) => setMentionQuery(e.target.value)}
-                      placeholder="Buscar usuarios para mencionar..."
-                      className="frosted w-full rounded-lg p-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"
-                    />
-                    {mentionQuery.trim().length >= 2 ? (
-                      <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900/95 backdrop-blur-md max-h-64 overflow-auto">
-                        {mentionLoading ? (
-                          <p className="px-3 py-2 text-sm text-gray-300">Buscando usuarios...</p>
-                        ) : mentionSuggestions.length === 0 ? (
-                          <p className="px-3 py-2 text-sm text-gray-400">Sin resultados.</p>
+                    <div className="ig-create-editor-body">
+                      <div className="ig-create-editor-preview">
+                        {isVideoUrl(mediaUrls[0]) ? (
+                          <video src={mediaUrls[0]} className="ig-create-editor-media" controls preload="metadata" />
                         ) : (
-                          mentionSuggestions.map((row) => (
-                            <button
-                              key={row.id}
-                              type="button"
-                              onClick={() => addMention(row.username)}
-                              className="w-full px-3 py-2 flex items-center gap-3 text-left hover:bg-white/5"
-                            >
-                              <div className="w-8 h-8 rounded-full overflow-hidden bg-primary/20 flex items-center justify-center">
-                                {row.avatar_url ? (
-                                  <img src={row.avatar_url} alt={row.username} className="w-full h-full object-cover" />
-                                ) : (
-                                  <span className="text-xs text-gray-200">{row.username.slice(0, 1).toUpperCase()}</span>
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <p className="text-sm text-white truncate">@{row.username}</p>
-                                <p className="text-xs text-gray-400 truncate">{row.full_name || "Usuario"}</p>
-                              </div>
-                            </button>
-                          ))
+                          <img src={mediaUrls[0]} alt="Vista previa de publicación" className="ig-create-editor-media" />
                         )}
                       </div>
-                    ) : null}
-                  </div>
-                </div>
 
-                {contentType === "goal" ? (
-                  <input
-                    type="date"
-                    value={goalDate}
-                    onChange={(e) => setGoalDate(e.target.value)}
-                    min={new Date().toISOString().split("T")[0]}
-                    className="frosted w-full rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                ) : null}
-
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => setShowImageSelector((prev) => !prev)}
-                    className="flex items-center text-sm text-gray-300 hover:text-white"
-                  >
-                    <Image className="w-4 h-4 mr-2" />
-                    {mediaUrls.length > 0 ? "Gestionar media" : "Anadir media"}
-                  </button>
-
-                  {showImageSelector ? (
-                    <div className="mt-3 grid grid-cols-2 gap-2">
-                      {IMAGE_OPTIONS.map((img) => (
-                        <button
-                          key={img.url}
-                          type="button"
-                          onClick={() => {
-                            setMediaUrls((prev) => {
-                              if (prev.includes(img.url)) return prev;
-                              if (prev.length >= MAX_MEDIA_PER_POST) return prev;
-                              return [...prev, img.url];
-                            });
-                          }}
-                          className={`rounded-lg overflow-hidden border-2 ${mediaUrls.includes(img.url) ? "border-primary" : "border-transparent"}`}
-                        >
-                          <img src={img.url} alt={img.label} className="w-full h-24 object-cover" />
-                          <div className="p-1 text-xs text-center">{img.label}</div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  <div className="mt-3 flex flex-wrap gap-2 items-center">
-                    <label className="px-3 py-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 cursor-pointer text-sm">
-                      Subir desde dispositivo
-                      <input
-                        type="file"
-                        accept="image/*,video/*"
-                        multiple
-                        className="hidden"
-                        onChange={(e) => {
-                          void uploadMediaFiles(e.target.files);
-                          e.currentTarget.value = "";
-                        }}
-                      />
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setShowImageSelector((prev) => !prev)}
-                      className="px-3 py-2 rounded-lg border border-white/20 text-gray-200 hover:border-white/40 text-sm"
-                    >
-                      {showImageSelector ? "Ocultar presets" : "Usar presets"}
-                    </button>
-                    {isUploadingMedia ? <span className="text-xs text-gray-300">Subiendo archivos...</span> : null}
-                  </div>
-
-                  {mediaUrls.length > 0 ? (
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {mediaUrls.map((url) => (
-                        <div
-                          key={url}
-                          className="relative rounded-lg overflow-hidden border border-white/15 cursor-zoom-in"
-                          onClick={() => {
-                            const index = mediaUrls.findIndex((item) => item === url);
-                            openMediaPreview(mediaUrls, index >= 0 ? index : 0);
-                          }}
-                        >
-                          {isVideoUrl(url) ? (
-                            <video src={url} className="w-full h-32 object-cover" muted controls preload="metadata" />
-                          ) : (
-                            <img src={url} alt="Media seleccionada" className="w-full h-32 object-cover" />
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeMediaUrl(url);
-                            }}
-                            className="absolute top-2 right-2 bg-black/70 p-1 rounded-full hover:bg-black"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                      <aside className="ig-create-editor-side">
+                        <div className="ig-create-editor-user">
+                          <div className="ig-create-editor-avatar">
+                            {user?.avatar_url ? (
+                              <img src={user.avatar_url} alt="Avatar" className="w-full h-full object-cover" />
+                            ) : (
+                              <span>{user?.username?.slice(0, 1)?.toUpperCase() ?? "U"}</span>
+                            )}
+                          </div>
+                          <span className="ig-create-editor-username">{user?.username ?? "usuario"}</span>
                         </div>
-                      ))}
-                    </div>
-                  ) : null}
 
-                  {contentType === "video" ? (
-                    <div className="mt-4 space-y-2">
-                      <p className="text-sm text-gray-300">Editor de portada por frame (timeline)</p>
-                      {firstVideoUrl ? (
-                        <div className="space-y-3">
-                          <video
-                            ref={coverVideoRef}
-                            src={firstVideoUrl}
-                            className="w-full h-44 object-cover rounded-lg border border-white/15"
-                            preload="metadata"
-                            controls
-                            crossOrigin="anonymous"
-                            onLoadedMetadata={(e) => {
-                              const duration = Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0;
-                              setCoverDurationSec(duration);
-                              setCoverFrameTimeSec(0);
-                            }}
-                            onTimeUpdate={(e) => setCoverFrameTimeSec(e.currentTarget.currentTime || 0)}
+                        <div className="ig-create-editor-caption">
+                          <textarea
+                            value={content}
+                            onChange={(e) => setContent(e.target.value)}
+                            placeholder="Escribe una descripción..."
+                            className="ig-create-editor-caption-input"
+                            maxLength={2200}
                           />
-                          <div className="space-y-2">
-                            <input
-                              type="range"
-                              min={0}
-                              max={Math.max(coverDurationSec, 0.001)}
-                              step={0.05}
-                              value={Math.min(coverFrameTimeSec, coverDurationSec)}
-                              onChange={(e) => {
-                                const next = Number(e.target.value);
-                                setCoverFrameTimeSec(next);
-                                if (coverVideoRef.current) {
-                                  coverVideoRef.current.currentTime = next;
-                                }
-                              }}
-                              className="w-full"
-                            />
-                            <div className="flex items-center justify-between text-xs text-gray-400">
-                              <span>{formatSec(coverFrameTimeSec)}</span>
-                              <span>{formatSec(coverDurationSec)}</span>
+                          <div className="ig-create-editor-count">{content.length}/2200</div>
+                        </div>
+                        <div className="ig-create-editor-row !h-auto !py-3 !items-start !flex-col !gap-2">
+                          <label className="text-xs text-gray-300">Menciones</label>
+                          {selectedMentions.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {selectedMentions.map((mention) => (
+                                <button
+                                  key={mention}
+                                  type="button"
+                                  onClick={() => removeMention(mention)}
+                                  className="px-2 py-0.5 rounded-full text-[11px] bg-cyan-500/15 border border-cyan-300/30 text-cyan-200 hover:bg-cyan-500/25"
+                                >
+                                  @{mention} <span className="opacity-80">x</span>
+                                </button>
+                              ))}
                             </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={() => void captureCoverFromTimeline()}
-                              disabled={isUploadingCover}
-                              className="px-3 py-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 text-sm disabled:opacity-60"
-                            >
-                              {isUploadingCover ? "Guardando portada..." : "Usar frame actual como portada"}
-                            </button>
+                          ) : null}
+                          <div className="relative w-full">
+                            <input
+                              type="text"
+                              value={mentionQuery}
+                              onChange={(e) => setMentionQuery(e.target.value)}
+                              placeholder="Buscar usuarios para mencionar..."
+                              className="ig-create-editor-input"
+                            />
+                            {mentionQuery.trim().length >= 2 ? (
+                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900/95 backdrop-blur-md max-h-56 overflow-auto">
+                                {mentionLoading ? (
+                                  <p className="px-3 py-2 text-xs text-gray-300">Buscando usuarios...</p>
+                                ) : mentionSuggestions.length === 0 ? (
+                                  <p className="px-3 py-2 text-xs text-gray-400">Sin resultados.</p>
+                                ) : (
+                                  mentionSuggestions.map((row) => (
+                                    <button
+                                      key={row.id}
+                                      type="button"
+                                      onClick={() => addMention(row.username)}
+                                      className="w-full px-3 py-2 flex items-center gap-2 text-left hover:bg-white/5"
+                                    >
+                                      <div className="w-7 h-7 rounded-full overflow-hidden bg-primary/20 flex items-center justify-center">
+                                        {row.avatar_url ? (
+                                          <img src={row.avatar_url} alt={row.username} className="w-full h-full object-cover" />
+                                        ) : (
+                                          <span className="text-xs text-gray-200">{row.username.slice(0, 1).toUpperCase()}</span>
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-xs text-white truncate">@{row.username}</p>
+                                        <p className="text-[11px] text-gray-400 truncate">{row.full_name || "Usuario"}</p>
+                                      </div>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
-                      ) : (
-                        <p className="text-xs text-gray-400">Sube al menos un video para habilitar el editor de portada.</p>
-                      )}
-
-                      {videoCoverUrl ? (
-                        <div className="relative w-44 rounded-lg overflow-hidden border border-white/20">
-                          <img src={videoCoverUrl} alt="Portada de video" className="w-full h-24 object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => setVideoCoverUrl(null)}
-                            className="absolute top-1.5 right-1.5 bg-black/70 p-1 rounded-full hover:bg-black"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-gray-400">Sin portada. Se usara la primera frame del video.</p>
-                      )}
+                      </aside>
                     </div>
-                  ) : null}
-                </div>
+                  </div>
+                ) : (
+                  <>
+                    {contentType === "photo" || contentType === "video" ? null : (
+                      <input
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Título de la publicación"
+                        className="frosted w-full rounded-lg p-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    )}
+
+                    {contentType === "photo" || contentType === "video" ? null : (
+                      <>
+                        <textarea
+                          value={content}
+                          onChange={(e) => setContent(e.target.value)}
+                          placeholder="Escribe tu contenido..."
+                          className="frosted w-full rounded-lg p-4 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary resize-none h-32"
+                        />
+
+                        <div className="space-y-2">
+                          <label className="text-sm text-gray-300">Menciones</label>
+                          {selectedMentions.length > 0 ? (
+                            <div className="flex flex-wrap gap-2">
+                              {selectedMentions.map((mention) => (
+                                <button
+                                  key={mention}
+                                  type="button"
+                                  onClick={() => removeMention(mention)}
+                                  className="px-2.5 py-1 rounded-full text-xs bg-cyan-500/15 border border-cyan-300/30 text-cyan-200 hover:bg-cyan-500/25"
+                                >
+                                  @{mention} <span className="opacity-80">x</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
+
+                          <div className="relative">
+                            <input
+                              type="text"
+                              value={mentionQuery}
+                              onChange={(e) => setMentionQuery(e.target.value)}
+                              placeholder="Buscar usuarios para mencionar..."
+                              className="frosted w-full rounded-lg p-3 text-white placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary"
+                            />
+                            {mentionQuery.trim().length >= 2 ? (
+                              <div className="absolute z-20 mt-2 w-full rounded-xl border border-white/20 bg-slate-900/95 backdrop-blur-md max-h-64 overflow-auto">
+                                {mentionLoading ? (
+                                  <p className="px-3 py-2 text-sm text-gray-300">Buscando usuarios...</p>
+                                ) : mentionSuggestions.length === 0 ? (
+                                  <p className="px-3 py-2 text-sm text-gray-400">Sin resultados.</p>
+                                ) : (
+                                  mentionSuggestions.map((row) => (
+                                    <button
+                                      key={row.id}
+                                      type="button"
+                                      onClick={() => addMention(row.username)}
+                                      className="w-full px-3 py-2 flex items-center gap-3 text-left hover:bg-white/5"
+                                    >
+                                      <div className="w-8 h-8 rounded-full overflow-hidden bg-primary/20 flex items-center justify-center">
+                                        {row.avatar_url ? (
+                                          <img src={row.avatar_url} alt={row.username} className="w-full h-full object-cover" />
+                                        ) : (
+                                          <span className="text-xs text-gray-200">{row.username.slice(0, 1).toUpperCase()}</span>
+                                        )}
+                                      </div>
+                                      <div className="min-w-0">
+                                        <p className="text-sm text-white truncate">@{row.username}</p>
+                                        <p className="text-xs text-gray-400 truncate">{row.full_name || "Usuario"}</p>
+                                      </div>
+                                    </button>
+                                  ))
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {contentType === "goal" ? (
+                      <input
+                        type="date"
+                        value={goalDate}
+                        onChange={(e) => setGoalDate(e.target.value)}
+                        min={new Date().toISOString().split("T")[0]}
+                        className="frosted w-full rounded-lg p-3 text-white focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    ) : null}
+
+                    <div>
+                      <InstagramMediaPicker
+                        mediaUrls={mediaUrls}
+                        isUploadingMedia={isUploadingMedia}
+                        isVideoUrl={isVideoUrl}
+                        onOpenPreview={(index) => openMediaPreview(mediaUrls, index >= 0 ? index : 0)}
+                        onRemoveMedia={removeMediaUrl}
+                        onUploadFiles={uploadMediaFiles}
+                      />
+
+                      {contentType === "video" ? (
+                        <div className="mt-4 space-y-2">
+                          <p className="text-sm text-gray-300">Editor de portada por frame (timeline)</p>
+                          {firstVideoUrl ? (
+                            <div className="space-y-3">
+                              <video
+                                ref={coverVideoRef}
+                                src={firstVideoUrl}
+                                className="w-full h-44 object-cover rounded-lg border border-white/15"
+                                preload="metadata"
+                                controls
+                                crossOrigin="anonymous"
+                                onLoadedMetadata={(e) => {
+                                  const duration = Number.isFinite(e.currentTarget.duration) ? e.currentTarget.duration : 0;
+                                  setCoverDurationSec(duration);
+                                  setCoverFrameTimeSec(0);
+                                }}
+                                onTimeUpdate={(e) => setCoverFrameTimeSec(e.currentTarget.currentTime || 0)}
+                              />
+                              <div className="space-y-2">
+                                <input
+                                  type="range"
+                                  min={0}
+                                  max={Math.max(coverDurationSec, 0.001)}
+                                  step={0.05}
+                                  value={Math.min(coverFrameTimeSec, coverDurationSec)}
+                                  onChange={(e) => {
+                                    const next = Number(e.target.value);
+                                    setCoverFrameTimeSec(next);
+                                    if (coverVideoRef.current) {
+                                      coverVideoRef.current.currentTime = next;
+                                    }
+                                  }}
+                                  className="w-full"
+                                />
+                                <div className="flex items-center justify-between text-xs text-gray-400">
+                                  <span>{formatSec(coverFrameTimeSec)}</span>
+                                  <span>{formatSec(coverDurationSec)}</span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => void captureCoverFromTimeline()}
+                                  disabled={isUploadingCover}
+                                  className="px-3 py-2 rounded-lg bg-primary/20 text-primary hover:bg-primary/30 text-sm disabled:opacity-60"
+                                >
+                                  {isUploadingCover ? "Guardando portada..." : "Usar frame actual como portada"}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-gray-400">Sube al menos un video para habilitar el editor de portada.</p>
+                          )}
+
+                          {videoCoverUrl ? (
+                            <div className="relative w-44 rounded-lg overflow-hidden border border-white/20">
+                              <img src={videoCoverUrl} alt="Portada de video" className="w-full h-24 object-cover" />
+                              <button
+                                type="button"
+                                onClick={() => setVideoCoverUrl(null)}
+                                className="absolute top-1.5 right-1.5 bg-black/70 p-1 rounded-full hover:bg-black"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-gray-400">Sin portada. Se usará el primer frame del video.</p>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  </>
+                )}
               </div>
 
-              <div className="flex justify-end mt-6 space-x-3">
+              {contentType === "photo" || contentType === "video" ? (
+                mediaUrls.length > 0 ? null : (
+                  <div className="flex justify-end mt-6 space-x-3">
+                    {editingPost ? (
+                      <button
+                        onClick={resetForm}
+                        className="border border-gray-700 hover:border-gray-500 px-4 py-2 rounded-lg inline-flex items-center transition-colors"
+                      >
+                        <X className="w-4 h-4 mr-2" />
+                        Cancelar
+                      </button>
+                    ) : null}
+
+                    <button
+                      onClick={() => void handleSubmit()}
+                      disabled={isSubmitting}
+                      className="bg-primary hover:bg-primary/80 px-6 py-2 rounded-lg inline-flex items-center transition-colors disabled:bg-primary/50 disabled:cursor-not-allowed"
+                    >
+                      {isSubmitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          {editingPost ? "Actualizando..." : "Publicando..."}
+                        </>
+                      ) : (
+                        <>
+                          <PlusCircle className="w-4 h-4 mr-2" />
+                          {editingPost ? "Actualizar" : "Publicar"}
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )
+              ) : (
+                <div className="flex justify-end mt-6 space-x-3">
                 {editingPost ? (
                   <button
                     onClick={resetForm}
@@ -976,7 +1034,8 @@ const Create = () => {
                     </>
                   )}
                 </button>
-              </div>
+                </div>
+              )}
             </>
           )}
         </Glass>
@@ -1100,7 +1159,7 @@ const Create = () => {
                 </div>
               </div>
 
-              <p className="text-white text-lg">Se compartio tu publicacion.</p>
+              <p className="text-white text-lg">Se compartió tu publicación.</p>
             </div>
           </div>
         ) : null}
@@ -1109,3 +1168,4 @@ const Create = () => {
 };
 
 export default Create;
+

@@ -8,6 +8,7 @@ export interface AuthUser {
   username: string;
   full_name: string;
   avatar_url: string;
+  website: string;
 }
 
 interface SignUpPayload {
@@ -21,7 +22,7 @@ interface AuthContextProps {
   user: AuthUser | null;
   loading: boolean;
   error: Error | null;
-  updateUserProfile: (patch: Partial<Pick<AuthUser, "username" | "full_name" | "avatar_url">>) => void;
+  updateUserProfile: (patch: Partial<Pick<AuthUser, "username" | "full_name" | "avatar_url" | "website">>) => void;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (payload: SignUpPayload) => Promise<void>;
   signOut: () => Promise<void>;
@@ -29,6 +30,54 @@ interface AuthContextProps {
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
 const PROFILE_TIMEOUT_MS = 6000;
+const SUPABASE_AUTH_KEY_SUFFIX = "-auth-token";
+
+const isSupabaseAuthLikeUser = (value: unknown): value is Pick<SupabaseAuthUser, "id" | "email" | "user_metadata"> =>
+  Boolean(
+    value &&
+      typeof value === "object" &&
+      "id" in value &&
+      typeof (value as { id?: unknown }).id === "string",
+  );
+
+const extractCachedSessionUser = (rawValue: unknown): Pick<SupabaseAuthUser, "id" | "email" | "user_metadata"> | null => {
+  if (!rawValue || typeof rawValue !== "object") return null;
+
+  const rawRecord = rawValue as Record<string, unknown>;
+  const candidateSources = [
+    rawRecord.user,
+    (rawRecord.currentSession as Record<string, unknown> | undefined)?.user,
+    (rawRecord.session as Record<string, unknown> | undefined)?.user,
+  ];
+
+  for (const source of candidateSources) {
+    if (isSupabaseAuthLikeUser(source)) return source;
+  }
+
+  return null;
+};
+
+const readCachedAuthUser = (): AuthUser | null => {
+  if (typeof window === "undefined" || !window.localStorage) return null;
+
+  try {
+    const authKey = Object.keys(window.localStorage).find(
+      (key) => key.startsWith("sb-") && key.endsWith(SUPABASE_AUTH_KEY_SUFFIX),
+    );
+    if (!authKey) return null;
+
+    const raw = window.localStorage.getItem(authKey);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as unknown;
+    const cachedSessionUser = extractCachedSessionUser(parsed);
+    if (!cachedSessionUser) return null;
+
+    return mapAuthUser(cachedSessionUser as SupabaseAuthUser, null);
+  } catch {
+    return null;
+  }
+};
 
 const withTimeout = async <T,>(promise: Promise<T>, ms = PROFILE_TIMEOUT_MS): Promise<T> => {
   const timeoutPromise = new Promise<never>((_, reject) => {
@@ -47,6 +96,7 @@ const mapAuthUser = (
     username?: string | null;
     full_name?: string | null;
     avatar_url?: string | null;
+    website?: string | null;
   } | null,
 ): AuthUser => {
   const email = authUser.email ?? "";
@@ -66,6 +116,10 @@ const mapAuthUser = (
     avatar_url:
       profile?.avatar_url ||
       (authUser.user_metadata?.avatar_url as string | undefined) ||
+      "",
+    website:
+      profile?.website ||
+      (authUser.user_metadata?.website as string | undefined) ||
       "",
   };
 };
@@ -92,7 +146,7 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => readCachedAuthUser());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
@@ -236,7 +290,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const updateUserProfile = (patch: Partial<Pick<AuthUser, "username" | "full_name" | "avatar_url">>) => {
+  const updateUserProfile = (patch: Partial<Pick<AuthUser, "username" | "full_name" | "avatar_url" | "website">>) => {
     setUser((prev) => {
       if (!prev) return prev;
       return { ...prev, ...patch };

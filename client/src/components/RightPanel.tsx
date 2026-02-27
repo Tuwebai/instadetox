@@ -1,10 +1,12 @@
-﻿import { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Glass } from "@/components/ui/glass";
 import { Quote, Calendar, AlertCircle, Users, RefreshCw } from "lucide-react";
 import { QUOTES, UPCOMING_UPDATES } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
+import BrandLogo from "@/components/BrandLogo";
+import { useDailyAppOpenCounter } from "@/hooks/useDailyAppOpenCounter";
 
 interface DetoxFriend {
   id: string;
@@ -21,11 +23,8 @@ const RightPanel = () => {
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
   const [autoRotate, setAutoRotate] = useState(false);
 
-  // State for detox days counter
-  const [detoxDays, setDetoxDays] = useState(() => {
-    const saved = localStorage.getItem("detoxDays");
-    return saved !== null ? parseInt(saved, 10) : 78;
-  });
+  // Daily app-open counter (persisted in DB)
+  const detoxDays = useDailyAppOpenCounter(user?.id ?? null);
 
   // State for detox friends (Supabase)
   const [detoxFriends, setDetoxFriends] = useState<DetoxFriend[]>([]);
@@ -33,11 +32,6 @@ const RightPanel = () => {
 
   // Toast notifications
   const { toast } = useToast();
-
-  // Effect to save detox days to localStorage
-  useEffect(() => {
-    localStorage.setItem("detoxDays", detoxDays.toString());
-  }, [detoxDays]);
 
   // Effect for auto-rotating quotes
   useEffect(() => {
@@ -117,24 +111,6 @@ const RightPanel = () => {
     void loadDetoxFriends();
   }, [user?.id]);
 
-  const resetCounter = () => {
-    setDetoxDays(0);
-    toast({
-      title: "Contador reiniciado",
-      description: "Comienza tu detox digital desde cero.",
-      duration: 3000,
-    });
-  };
-
-  const incrementCounter = () => {
-    setDetoxDays((prev) => prev + 1);
-    toast({
-      title: "Felicidades",
-      description: "Has sumado un dia mas a tu detox digital.",
-      duration: 3000,
-    });
-  };
-
   const rotateQuotes = () => {
     // Get new random quote indexes that are not currently shown
     const allIndexes = Array.from({ length: QUOTES.length }, (_, i) => i);
@@ -173,6 +149,20 @@ const RightPanel = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Days counter */}
+      <Glass className="p-6">
+        <h3 className="text-lg font-medium mb-3 flex items-center">
+          <Calendar className="w-5 h-5 mr-2 text-primary" />
+          <BrandLogo className="h-12" />
+        </h3>
+        <div className="flex flex-col items-center py-4">
+          <div className="text-5xl font-bold text-center bg-gradient-text transition-all duration-300 transform hover:scale-110">
+            {detoxDays}
+          </div>
+          <p className="text-gray-300 mt-2">dias sin Instadetox</p>
+        </div>
+      </Glass>
+
       {/* Quotes section */}
       <Glass className="p-6 relative">
         <div className="flex justify-between items-center mb-3">
@@ -219,34 +209,6 @@ const RightPanel = () => {
               </div>
             </div>
           ))}
-        </div>
-      </Glass>
-
-      {/* Days counter */}
-      <Glass className="p-6">
-        <h3 className="text-lg font-medium mb-3 flex items-center">
-          <Calendar className="w-5 h-5 mr-2 text-primary" />
-          InstaDetox
-        </h3>
-        <div className="flex flex-col items-center py-4">
-          <div className="text-5xl font-bold text-center bg-gradient-text transition-all duration-300 transform hover:scale-110">
-            {detoxDays}
-          </div>
-          <p className="text-gray-300 mt-2">dias sin Instagram</p>
-          <div className="flex space-x-3 mt-4">
-            <button
-              onClick={resetCounter}
-              className="border border-gray-600 hover:border-gray-400 px-3 py-1 rounded-lg text-sm transition-colors duration-200"
-            >
-              Reiniciar
-            </button>
-            <button
-              onClick={incrementCounter}
-              className="bg-primary/80 hover:bg-primary px-3 py-1 rounded-lg text-sm transition-colors duration-200"
-            >
-              +1 dia
-            </button>
-          </div>
         </div>
       </Glass>
 

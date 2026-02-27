@@ -23,6 +23,7 @@ build/
 .idea/
 *.swp
 *.swo
+*.sql
 
 # OS
 .DS_Store
@@ -40,3 +41,19 @@ Thumbs.db
 
 # Other
 tash
+AGENTS.md
+fichaapp.png
+ROADMAP_PARIDAD_INSTAGRAM_INSTADETOX.md
+index-instagram.pretty.html
+index-instagram.html
+docs/arquitectura_instagram_notifiaciones.md
+docs/branding-assets.md
+docs/edit-profile.md
+docs/auth-bootstrap.md
+docs/instagram-parity-blocks.md
+docs/mensajeria-instagram-parent.md
+docs/privacy-page.md
+docs/profile-page.md
+docs/profile-tech-debt-plan.md
+docs/right-panel.md
+AGENTS.md

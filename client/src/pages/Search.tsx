@@ -36,6 +36,7 @@ const Search = () => {
   const [postResults, setPostResults] = useState<SearchPost[]>([]);
   const [recommendedUsers, setRecommendedUsers] = useState<SearchUser[]>([]);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
   const [followLoadingById, setFollowLoadingById] = useState<Record<string, boolean>>({});
 
   const normalizedQuery = useMemo(() => query.trim(), [query]);
@@ -44,22 +45,33 @@ const Search = () => {
   const syncFollowState = async (userIds: string[]) => {
     if (!supabase || !user?.id || userIds.length === 0) {
       setFollowedIds(new Set());
+      setPendingIds(new Set());
       return;
     }
 
     const deduped = Array.from(new Set(userIds.filter((id) => id !== user.id)));
     if (deduped.length === 0) {
       setFollowedIds(new Set());
+      setPendingIds(new Set());
       return;
     }
 
-    const { data } = await supabase
-      .from("follows")
-      .select("following_id")
-      .eq("follower_id", user.id)
-      .in("following_id", deduped);
+    const [{ data: followsData }, { data: pendingData }] = await Promise.all([
+      supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", user.id)
+        .in("following_id", deduped),
+      supabase
+        .from("follow_requests")
+        .select("target_id")
+        .eq("requester_id", user.id)
+        .eq("status", "pending")
+        .in("target_id", deduped),
+    ]);
 
-    setFollowedIds(new Set((data ?? []).map((item) => item.following_id as string)));
+    setFollowedIds(new Set((followsData ?? []).map((item) => item.following_id as string)));
+    setPendingIds(new Set((pendingData ?? []).map((item) => item.target_id as string)));
   };
 
   const loadRecommendedUsers = async () => {
@@ -158,20 +170,88 @@ const Search = () => {
     return () => window.removeEventListener("instadetox:avatar-updated", onAvatarUpdated as EventListener);
   }, []);
 
+  useEffect(() => {
+    if (!supabase || !user?.id) return;
+    const client = supabase;
+    const channel = client.channel(`search-follow-realtime:${user.id}:${Date.now()}`);
+
+    channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "follows", filter: `follower_id=eq.${user.id}` },
+      (payload) => {
+        const row = (payload.eventType === "DELETE" ? payload.old : payload.new) as Record<string, unknown>;
+        const targetId = row.following_id as string | undefined;
+        if (!targetId) return;
+
+        if (payload.eventType === "INSERT") {
+          setFollowedIds((prev) => new Set(prev).add(targetId));
+          setPendingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(targetId);
+            return next;
+          });
+          return;
+        }
+
+        if (payload.eventType === "DELETE") {
+          setFollowedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(targetId);
+            return next;
+          });
+        }
+      },
+    );
+
+    channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "follow_requests", filter: `requester_id=eq.${user.id}` },
+      (payload) => {
+        const row = (payload.eventType === "DELETE" ? payload.old : payload.new) as Record<string, unknown>;
+        const targetId = row.target_id as string | undefined;
+        if (!targetId) return;
+        const status = row.status as string | undefined;
+        const isPending = payload.eventType !== "DELETE" && status === "pending";
+
+        if (isPending) {
+          setPendingIds((prev) => new Set(prev).add(targetId));
+          return;
+        }
+
+        setPendingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(targetId);
+          return next;
+        });
+      },
+    );
+
+    channel.subscribe();
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   const toggleFollow = async (targetUserId: string) => {
     if (!supabase || !user?.id || targetUserId === user.id) return;
 
     const currentlyFollowing = followedIds.has(targetUserId);
+    const currentlyPending = pendingIds.has(targetUserId);
     setFollowLoadingById((prev) => ({ ...prev, [targetUserId]: true }));
-    setFollowedIds((prev) => {
-      const next = new Set(prev);
-      if (currentlyFollowing) {
+    if (currentlyFollowing) {
+      setFollowedIds((prev) => {
+        const next = new Set(prev);
         next.delete(targetUserId);
-      } else {
-        next.add(targetUserId);
-      }
-      return next;
-    });
+        return next;
+      });
+    }
+    if (currentlyPending) {
+      setPendingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(targetUserId);
+        return next;
+      });
+    }
 
     if (currentlyFollowing) {
       const { error } = await supabase
@@ -184,19 +264,57 @@ const Search = () => {
         setFollowedIds((prev) => new Set(prev).add(targetUserId));
         toast({ title: "Error", description: "No se pudo dejar de seguir." });
       }
-    } else {
-      const { error } = await supabase.from("follows").insert({
-        follower_id: user.id,
-        following_id: targetUserId,
-      });
+    } else if (currentlyPending) {
+      const { error } = await supabase
+        .from("follow_requests")
+        .update({ status: "canceled", resolved_at: new Date().toISOString() })
+        .eq("requester_id", user.id)
+        .eq("target_id", targetUserId)
+        .eq("status", "pending");
 
       if (error) {
-        setFollowedIds((prev) => {
-          const next = new Set(prev);
-          next.delete(targetUserId);
-          return next;
+        setPendingIds((prev) => new Set(prev).add(targetUserId));
+        toast({ title: "Error", description: "No se pudo cancelar la solicitud." });
+      }
+    } else {
+      const { data: targetProfile } = await supabase.from("profiles").select("is_private").eq("id", targetUserId).maybeSingle();
+      const targetIsPrivate = Boolean(targetProfile?.is_private);
+
+      if (targetIsPrivate) {
+        setPendingIds((prev) => new Set(prev).add(targetUserId));
+        const { error } = await supabase.from("follow_requests").upsert(
+          {
+            requester_id: user.id,
+            target_id: targetUserId,
+            status: "pending",
+            resolved_at: null,
+          },
+          { onConflict: "requester_id,target_id" },
+        );
+
+        if (error) {
+          setPendingIds((prev) => {
+            const next = new Set(prev);
+            next.delete(targetUserId);
+            return next;
+          });
+          toast({ title: "Error", description: "No se pudo enviar la solicitud." });
+        }
+      } else {
+        setFollowedIds((prev) => new Set(prev).add(targetUserId));
+        const { error } = await supabase.from("follows").insert({
+          follower_id: user.id,
+          following_id: targetUserId,
         });
-        toast({ title: "Error", description: "No se pudo seguir al usuario." });
+
+        if (error) {
+          setFollowedIds((prev) => {
+            const next = new Set(prev);
+            next.delete(targetUserId);
+            return next;
+          });
+          toast({ title: "Error", description: "No se pudo seguir al usuario." });
+        }
       }
     }
 
@@ -227,10 +345,18 @@ const Search = () => {
         className={`text-xs px-3 py-1 rounded-full border transition ${
           followedIds.has(item.id)
             ? "border-white/30 text-gray-200 hover:border-white/50"
+            : pendingIds.has(item.id)
+            ? "border-white/30 text-gray-200 hover:border-white/50"
             : "border-primary/60 text-primary hover:bg-primary/20"
         } disabled:opacity-60`}
       >
-        {followLoadingById[item.id] ? "..." : followedIds.has(item.id) ? "Siguiendo" : "Seguir"}
+        {followLoadingById[item.id]
+          ? "..."
+          : followedIds.has(item.id)
+            ? "Siguiendo"
+            : pendingIds.has(item.id)
+              ? "Pendiente"
+              : "Seguir"}
       </button>
     </div>
   );
@@ -328,10 +454,18 @@ const Search = () => {
                           className={`text-xs px-3 py-1 rounded-full border transition ${
                             followedIds.has(post.user_id)
                               ? "border-white/30 text-gray-200 hover:border-white/50"
+                              : pendingIds.has(post.user_id)
+                              ? "border-white/30 text-gray-200 hover:border-white/50"
                               : "border-primary/60 text-primary hover:bg-primary/20"
                           } disabled:opacity-60`}
                         >
-                          {followLoadingById[post.user_id] ? "..." : followedIds.has(post.user_id) ? "Siguiendo" : "Seguir"}
+                          {followLoadingById[post.user_id]
+                            ? "..."
+                            : followedIds.has(post.user_id)
+                              ? "Siguiendo"
+                              : pendingIds.has(post.user_id)
+                                ? "Pendiente"
+                                : "Seguir"}
                         </button>
                       ) : null}
                     </div>

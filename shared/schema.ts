@@ -38,6 +38,13 @@ export const goalStatusEnum = pgEnum("goal_status_enum", [
   "archived",
 ]);
 
+export const followRequestStatusEnum = pgEnum("follow_request_status_enum", [
+  "pending",
+  "accepted",
+  "rejected",
+  "canceled",
+]);
+
 export const profiles = pgTable("profiles", {
   id: uuid("id").primaryKey(),
   username: text("username").notNull().unique(),
@@ -61,6 +68,21 @@ export const follows = pgTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.followerId, table.followingId] }),
+  }),
+);
+
+export const followRequests = pgTable(
+  "follow_requests",
+  {
+    requesterId: uuid("requester_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+    targetId: uuid("target_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+    status: followRequestStatusEnum("status").notNull().default("pending"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.requesterId, table.targetId] }),
   }),
 );
 

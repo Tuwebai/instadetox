@@ -1,122 +1,52 @@
-import { useMemo, useState } from "react";
-import { Bookmark, ChevronLeft, ChevronRight, Heart, MessageCircle, MoreHorizontal, Send } from "lucide-react";
-import { Link } from "wouter";
-import { Glass } from "@/components/ui/glass";
-import MentionText from "@/components/ui/mention-text";
+import { useEffect, useMemo, useState } from "react";
+import FeedPostHeader from "@/components/feed/FeedPostHeader";
+import FeedPostMedia from "@/components/feed/FeedPostMedia";
+import FeedPostFooter from "@/components/feed/FeedPostFooter";
+import { parseMediaList, shortTimeAgo } from "@/components/feed/feedPostUtils";
+import type { FeedPostCardRow, FeedPostComment } from "@/components/feed/feedPostTypes";
+import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
+import { prefetchProfileRouteSnapshot } from "@/lib/profileRouteCache";
 
-export interface FeedPostCardRow {
-  id: string;
-  user_id: string;
-  type: string;
-  title: string | null;
-  caption: string;
-  media_url: string | null;
-  video_cover_url?: string | null;
-  mentions?: string[] | null;
-  likes_count: number;
-  comments_count: number;
-  created_at: string;
-  username: string | null;
-  full_name: string | null;
-  avatar_url: string | null;
-  likedByMe?: boolean;
-}
-
-export interface FeedPostComment {
-  id: string;
-  post_id: string;
-  user_id: string;
-  content: string;
-  created_at: string;
-}
+export type { FeedPostCardRow, FeedPostComment } from "@/components/feed/feedPostTypes";
 
 interface FeedPostCardProps {
   post: FeedPostCardRow;
   currentUserId?: string;
+  contextLabel?: string | null;
   isFollowingAuthor: boolean;
+  isFollowPendingAuthor: boolean;
+  isFavoriteAuthor: boolean;
   followLoading: boolean;
   isSaved: boolean;
   commentsOpen: boolean;
   comments: FeedPostComment[];
   commentInput: string;
-  onToggleFollow: (authorId: string) => void;
+  onToggleFollow: (authorId: string) => Promise<void> | void;
   onToggleLike: () => void;
   onToggleSave: () => void;
   onToggleComments: () => void;
   onShare: () => void;
   onCommentInputChange: (value: string) => void;
   onSubmitComment: () => void;
+  onOpenPost: () => void;
+  onWarmRoute?: () => void;
+  onWarmProfileRoute?: () => void;
+  onDeletePost: (postId: string) => Promise<boolean>;
+  onReportPost: (postId: string, reportedUserId: string, reason: string) => Promise<boolean>;
+  onToggleFavoriteAuthor: (authorId: string) => Promise<boolean>;
+  onToggleHideLikeCount: (postId: string, nextValue: boolean) => Promise<boolean>;
+  onToggleCommentsEnabled: (postId: string, nextValue: boolean) => Promise<boolean>;
+  onEditPostCaption: (postId: string, nextCaption: string) => Promise<boolean>;
 }
-
-const compactCount = (value: number) =>
-  new Intl.NumberFormat("es-AR", {
-    notation: "compact",
-    maximumFractionDigits: 1,
-  }).format(Math.max(0, value));
-
-const shortTimeAgo = (isoDate: string) => {
-  const now = Date.now();
-  const at = new Date(isoDate).getTime();
-  const diffMs = Math.max(0, now - at);
-  const minute = 60 * 1000;
-  const hour = 60 * minute;
-  const day = 24 * hour;
-  const week = 7 * day;
-
-  if (diffMs < minute) return "ahora";
-  if (diffMs < hour) return `${Math.floor(diffMs / minute)} min`;
-  if (diffMs < day) return `${Math.floor(diffMs / hour)} h`;
-  if (diffMs < week) return `${Math.floor(diffMs / day)} d`;
-  return `${Math.floor(diffMs / week)} sem`;
-};
-
-const isVideoUrl = (mediaUrl: string | null) => {
-  if (!mediaUrl) return false;
-  return /\.(mp4|webm|mov|m4v|ogg)(\?|$)/i.test(mediaUrl) || mediaUrl.includes(".m3u8");
-};
-
-const parseMediaList = (mediaUrl: string | null): string[] => {
-  if (!mediaUrl) return [];
-  const raw = mediaUrl.trim();
-  if (!raw) return [];
-
-  if (raw.startsWith("[")) {
-    try {
-      const parsed: unknown = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .map((item) => {
-            if (typeof item === "string") return item.trim();
-            if (
-              item &&
-              typeof item === "object" &&
-              "url" in item &&
-              typeof (item as { url: unknown }).url === "string"
-            ) {
-              return (item as { url: string }).url.trim();
-            }
-            return "";
-          })
-          .filter(Boolean);
-      }
-    } catch {
-      // fallback to plain text parsing
-    }
-  }
-
-  return raw
-    .split(/[\n,|]/g)
-    .map((item) => item.trim())
-    .filter(Boolean);
-};
-
-const isInstagramMediaType = (post: FeedPostCardRow) => post.type === "photo" || post.type === "video";
-const profileHref = (username: string | null | undefined) => (username ? `/${username}` : "/inicio");
 
 const FeedPostCard = ({
   post,
   currentUserId,
+  contextLabel,
   isFollowingAuthor,
+  isFollowPendingAuthor,
+  isFavoriteAuthor,
   followLoading,
   isSaved,
   commentsOpen,
@@ -129,309 +59,216 @@ const FeedPostCard = ({
   onShare,
   onCommentInputChange,
   onSubmitComment,
+  onOpenPost,
+  onWarmRoute,
+  onWarmProfileRoute,
+  onDeletePost,
+  onReportPost,
+  onToggleFavoriteAuthor,
+  onToggleHideLikeCount,
+  onToggleCommentsEnabled,
+  onEditPostCaption,
 }: FeedPostCardProps) => {
-  const [isMuted, setIsMuted] = useState(true);
   const [activeMediaIndex, setActiveMediaIndex] = useState(0);
-  const isOwnPost = Boolean(currentUserId && post.user_id === currentUserId);
-  const showInstagramMediaCard = isInstagramMediaType(post) && Boolean(post.media_url);
+  const [isMuted, setIsMuted] = useState(true);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [menuBusy, setMenuBusy] = useState(false);
+  const [editingCaption, setEditingCaption] = useState(false);
+  const [captionDraft, setCaptionDraft] = useState(post.caption ?? "");
   const mediaItems = useMemo(() => parseMediaList(post.media_url), [post.media_url]);
-  const mediaList = mediaItems.length > 0 ? mediaItems : post.media_url ? [post.media_url] : [];
-  const activeMedia = mediaList[activeMediaIndex] ?? mediaList[0] ?? null;
-  const showVideo = post.type === "video" || isVideoUrl(activeMedia);
-  const hasCarousel = mediaList.length > 1;
+  const isOwnPost = Boolean(currentUserId && post.user_id === currentUserId);
   const publishedAgo = useMemo(() => shortTimeAgo(post.created_at), [post.created_at]);
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+
+  const commentsEnabled = post.comments_enabled !== false;
+  const hideLikeCount = Boolean(post.hide_like_count);
+  const postUrl = `${window.location.origin}/p/${post.id}`;
+
+  useEffect(() => {
+    setCaptionDraft(post.caption ?? "");
+  }, [post.caption, post.id]);
 
   const goPrevMedia = () => {
-    if (!hasCarousel) return;
-    setActiveMediaIndex((prev) => (prev - 1 + mediaList.length) % mediaList.length);
+    if (mediaItems.length <= 1) return;
+    setActiveMediaIndex((prev) => (prev - 1 + mediaItems.length) % mediaItems.length);
   };
 
   const goNextMedia = () => {
-    if (!hasCarousel) return;
-    setActiveMediaIndex((prev) => (prev + 1) % mediaList.length);
+    if (mediaItems.length <= 1) return;
+    setActiveMediaIndex((prev) => (prev + 1) % mediaItems.length);
   };
 
-  if (!showInstagramMediaCard) {
-    return (
-      <Glass className="p-5 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-primary/30 overflow-hidden">
-            {post.avatar_url ? (
-              <img src={post.avatar_url} alt={post.username ?? "avatar"} className="h-full w-full object-cover" />
-            ) : null}
-          </div>
-          <div className="flex-1">
-            <Link
-              href={profileHref(post.username)}
-              className="text-sm font-semibold text-white hover:text-cyan-200 transition-colors"
-            >
-              {post.full_name || post.username || "usuario"}
-            </Link>
-            <p className="text-xs text-gray-300">@{post.username || "usuario"}</p>
-          </div>
-          {!isOwnPost ? (
-            <button
-              onClick={() => onToggleFollow(post.user_id)}
-              disabled={followLoading}
-              className={`text-xs px-3 py-1 rounded-full border transition ${
-                isFollowingAuthor
-                  ? "border-white/30 text-gray-200 hover:border-white/50"
-                  : "border-primary/60 text-primary hover:bg-primary/20"
-              } disabled:opacity-60`}
-            >
-              {followLoading ? "..." : isFollowingAuthor ? "Siguiendo" : "Seguir"}
-            </button>
-          ) : null}
-        </div>
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(postUrl);
+      toast({ title: "Enlace copiado", description: "Se copio el enlace de la publicacion." });
+      setOptionsOpen(false);
+    } catch {
+      toast({ title: "Error", description: "No se pudo copiar el enlace." });
+    }
+  };
 
-        {post.title ? <h3 className="text-lg font-semibold text-white">{post.title}</h3> : null}
-        <p className="text-gray-200 whitespace-pre-line">
-          <MentionText text={post.caption} />
-        </p>
-        {(post.mentions ?? []).length > 0 ? (
-          <div className="text-sm text-cyan-200 flex flex-wrap gap-x-2 gap-y-1">
-            {(post.mentions ?? []).map((mention) => (
-              <Link
-                key={`${post.id}-m-${mention}`}
-                href={`/${mention}`}
-                className="text-cyan-200 hover:text-cyan-100"
-              >
-                @{mention}
-              </Link>
-            ))}
-          </div>
-        ) : null}
+  const handleCopyEmbed = async () => {
+    const embed = `<blockquote class=\"instadetox-embed\" data-post-id=\"${post.id}\"><a href=\"${postUrl}\">Ver publicacion</a></blockquote>`;
+    try {
+      await navigator.clipboard.writeText(embed);
+      toast({ title: "Insertar", description: "Codigo de insercion copiado." });
+      setOptionsOpen(false);
+    } catch {
+      toast({ title: "Error", description: "No se pudo copiar el codigo." });
+    }
+  };
 
-        {activeMedia ? (
-          <div className="overflow-hidden rounded-xl border border-white/20 bg-black">
-            {showVideo ? (
-              <video
-                src={activeMedia}
-                className="w-full h-72 object-cover"
-                poster={post.video_cover_url ?? undefined}
-                controls
-                playsInline
-                preload="metadata"
-              />
-            ) : (
-              <img src={activeMedia} alt={post.title ?? "post"} className="w-full h-72 object-cover" />
-            )}
-          </div>
-        ) : null}
+  const handleToggleFollowFromMenu = async () => {
+    if (isOwnPost) return;
+    if (!isFollowingAuthor && !isFollowPendingAuthor) {
+      toast({ title: "Info", description: "No sigues a esta cuenta." });
+      setOptionsOpen(false);
+      return;
+    }
+    setMenuBusy(true);
+    try {
+      await onToggleFollow(post.user_id);
+      setOptionsOpen(false);
+    } finally {
+      setMenuBusy(false);
+    }
+  };
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-gray-300">
-          <button className={`inline-flex items-center gap-2 ${post.likedByMe ? "text-red-300" : ""}`} onClick={onToggleLike}>
-            <Heart className={`w-4 h-4 ${post.likedByMe ? "fill-red-300" : ""}`} /> {post.likes_count}
-          </button>
-          <button className="inline-flex items-center gap-2" onClick={onToggleComments}>
-            <MessageCircle className="w-4 h-4" /> {post.comments_count}
-          </button>
-          <button className={`inline-flex items-center gap-2 ${isSaved ? "text-cyan-200" : ""}`} onClick={onToggleSave}>
-            <Bookmark className={`w-4 h-4 ${isSaved ? "fill-cyan-200" : ""}`} />
-            {isSaved ? "Guardado" : "Guardar"}
-          </button>
-          <button className="inline-flex items-center gap-2" onClick={onShare}>
-            <Send className="w-4 h-4" /> Compartir
-          </button>
-          <span className="w-full text-xs text-gray-400 sm:w-auto sm:ml-auto">{new Date(post.created_at).toLocaleString()}</span>
-        </div>
+  const handleDeletePost = async () => {
+    if (!isOwnPost || menuBusy) return;
+    setMenuBusy(true);
+    try {
+      const ok = await onDeletePost(post.id);
+      if (ok) setOptionsOpen(false);
+    } finally {
+      setMenuBusy(false);
+    }
+  };
 
-        {commentsOpen ? (
-          <div className="space-y-3 pt-2 border-t border-white/10">
-            <div className="space-y-2 max-h-48 overflow-auto pr-1">
-              {comments.length === 0 ? (
-                <p className="text-xs text-gray-400">Sin comentarios aun.</p>
-              ) : (
-                comments.map((comment) => (
-                  <div key={comment.id} className="frosted rounded-lg px-3 py-2">
-                    <p className="text-xs text-gray-400">{comment.user_id.slice(0, 8)}</p>
-                    <p className="text-sm text-white whitespace-pre-line">{comment.content}</p>
-                  </div>
-                ))
-              )}
-            </div>
+  const handleReportPost = async () => {
+    if (menuBusy) return;
+    setMenuBusy(true);
+    try {
+      const ok = await onReportPost(post.id, post.user_id, "menu_report");
+      if (ok) setOptionsOpen(false);
+    } finally {
+      setMenuBusy(false);
+    }
+  };
 
-            <div className="flex gap-2">
-              <input
-                value={commentInput}
-                onChange={(e) => onCommentInputChange(e.target.value)}
-                placeholder="Escribe un comentario..."
-                className="frosted flex-1 rounded-lg px-3 py-2 text-white placeholder:text-gray-400"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    onSubmitComment();
-                  }
-                }}
-              />
-              <button onClick={onSubmitComment} className="bg-primary hover:bg-primary/80 px-3 py-2 rounded-lg">
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </Glass>
-    );
-  }
+  const handleToggleFavorite = async () => {
+    if (menuBusy) return;
+    setMenuBusy(true);
+    try {
+      await onToggleFavoriteAuthor(post.user_id);
+      setOptionsOpen(false);
+    } finally {
+      setMenuBusy(false);
+    }
+  };
+
+  const handleToggleHideLikes = async () => {
+    if (!isOwnPost || menuBusy) return;
+    setMenuBusy(true);
+    try {
+      const ok = await onToggleHideLikeCount(post.id, !hideLikeCount);
+      if (ok) setOptionsOpen(false);
+    } finally {
+      setMenuBusy(false);
+    }
+  };
+
+  const handleToggleCommentsAvailability = async () => {
+    if (!isOwnPost || menuBusy) return;
+    setMenuBusy(true);
+    try {
+      const ok = await onToggleCommentsEnabled(post.id, !commentsEnabled);
+      if (ok) setOptionsOpen(false);
+    } finally {
+      setMenuBusy(false);
+    }
+  };
+
+  const handleSaveCaption = async () => {
+    const nextCaption = captionDraft.trim();
+    if (!nextCaption || nextCaption === post.caption) {
+      setEditingCaption(false);
+      return;
+    }
+    setMenuBusy(true);
+    try {
+      const ok = await onEditPostCaption(post.id, nextCaption);
+      if (ok) {
+        setEditingCaption(false);
+        setOptionsOpen(false);
+      }
+    } finally {
+      setMenuBusy(false);
+    }
+  };
 
   return (
-    <Glass className="p-0 overflow-hidden w-full md:max-w-[560px] md:mx-auto">
-      <div className="px-3 py-2.5 flex items-center gap-3">
-        <div className="h-8 w-8 rounded-full bg-primary/30 overflow-hidden flex-shrink-0">
-          {post.avatar_url ? (
-            <img src={post.avatar_url} alt={post.username ?? "avatar"} className="h-full w-full object-cover" />
-          ) : null}
-        </div>
-        <div className="min-w-0 flex-1">
-          <Link
-            href={profileHref(post.username)}
-            className="text-[14px] leading-4 font-semibold text-white hover:text-cyan-200 transition-colors truncate block"
-          >
-            {post.username || "usuario"}
-          </Link>
-          <p className="text-[11px] text-gray-400 truncate">{publishedAgo}</p>
-        </div>
-        {!isOwnPost ? (
-          <button
-            onClick={() => onToggleFollow(post.user_id)}
-            disabled={followLoading}
-            className="text-[12px] font-semibold text-cyan-300 hover:text-cyan-200 transition-colors disabled:opacity-60"
-          >
-            {followLoading ? "..." : isFollowingAuthor ? "Siguiendo" : "Seguir"}
-          </button>
-        ) : null}
-        <button className="p-1.5 rounded hover:bg-white/10" aria-label="Mas opciones">
-          <MoreHorizontal className="w-4 h-4 text-gray-300" />
-        </button>
-      </div>
+    <article className="ig-feed-card" onMouseEnter={() => onWarmRoute?.()} onFocusCapture={() => onWarmRoute?.()}>
+      <FeedPostHeader
+        username={post.username}
+        avatarUrl={post.avatar_url}
+        publishedAgo={publishedAgo}
+        contextLabel={contextLabel}
+        isOwnPost={isOwnPost}
+        isFollowingAuthor={isFollowingAuthor}
+        isFollowPendingAuthor={isFollowPendingAuthor}
+        followLoading={followLoading}
+        onWarmProfileRoute={onWarmProfileRoute}
+        onToggleFollow={() => onToggleFollow(post.user_id)}
+        onOpenOptions={() => setOptionsOpen(true)}
+      />
 
-      <div className="bg-black border-y border-white/10">
-        <div className="relative w-full aspect-[4/5]">
-          {showVideo ? (
-            <>
-              <video
-                src={activeMedia ?? undefined}
-                className="absolute inset-0 w-full h-full object-cover"
-                poster={post.video_cover_url ?? undefined}
-                autoPlay
-                muted={isMuted}
-                loop
-                playsInline
-                preload="metadata"
-                controls={false}
-              />
-              <button
-                onClick={() => setIsMuted((prev) => !prev)}
-                className="absolute bottom-3 right-3 text-xs px-2 py-1 rounded-full bg-black/60 text-white border border-white/20"
-              >
-                {isMuted ? "Sin sonido" : "Sonido"}
-              </button>
-            </>
-          ) : (
-            <img
-              src={activeMedia ?? undefined}
-              alt={post.title ?? "publicacion"}
-              className="absolute inset-0 w-full h-full object-cover"
-              loading="lazy"
-            />
-          )}
+      <FeedPostMedia
+        mediaList={mediaItems}
+        activeMediaIndex={activeMediaIndex}
+        onPrev={goPrevMedia}
+        onNext={goNextMedia}
+        onSelect={setActiveMediaIndex}
+        isMuted={isMuted}
+        onToggleMute={() => setIsMuted((prev) => !prev)}
+        caption={post.caption}
+      />
 
-          {hasCarousel ? (
-            <>
-              <button
-                onClick={goPrevMedia}
-                className="absolute left-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/55 border border-white/25 text-white hover:bg-black/70"
-                aria-label="Media anterior"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <button
-                onClick={goNextMedia}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-black/55 border border-white/25 text-white hover:bg-black/70"
-                aria-label="Media siguiente"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-              <div className="absolute top-2 right-2 text-[11px] px-2 py-0.5 rounded-full bg-black/60 text-white border border-white/20">
-                {activeMediaIndex + 1}/{mediaList.length}
-              </div>
-            </>
-          ) : null}
-        </div>
-      </div>
+      <FeedPostFooter
+        username={post.username}
+        caption={post.caption}
+        mentions={post.mentions}
+        likedByMe={Boolean(post.likedByMe)}
+        isSaved={isSaved}
+        likesCount={post.likes_count}
+        commentsCount={post.comments_count}
+        hideLikeCount={hideLikeCount}
+        onWarmProfileRoute={onWarmProfileRoute}
+        onToggleLike={onToggleLike}
+        onOpenPost={onOpenPost}
+        onShare={onShare}
+        onToggleSave={onToggleSave}
+      />
 
-      <div className="px-3 pt-2.5 pb-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button className={`inline-flex ${post.likedByMe ? "text-red-300" : "text-white"}`} onClick={onToggleLike} aria-label="Like">
-              <Heart className={`w-6 h-6 ${post.likedByMe ? "fill-red-300" : ""}`} />
-            </button>
-            <button className="inline-flex text-white" onClick={onToggleComments} aria-label="Comentar">
-              <MessageCircle className="w-6 h-6" />
-            </button>
-            <button className="inline-flex text-white" onClick={onShare} aria-label="Compartir">
-              <Send className="w-6 h-6" />
-            </button>
+      {commentsOpen ? (
+        <div className="ig-post-inline-comments">
+          <div className="ig-post-inline-comments-list">
+            {comments.length === 0 ? (
+              <p className="text-xs text-gray-400">Sin comentarios aun.</p>
+            ) : (
+              comments.map((comment) => (
+                <div key={comment.id} className="frosted rounded-lg px-3 py-2">
+                  <p className="text-xs text-gray-400">{comment.user_id.slice(0, 8)}</p>
+                  <p className="text-sm text-white whitespace-pre-line">{comment.content}</p>
+                </div>
+              ))
+            )}
           </div>
-          <button className={`inline-flex ${isSaved ? "text-cyan-200" : "text-white"}`} onClick={onToggleSave} aria-label="Guardar">
-            <Bookmark className={`w-6 h-6 ${isSaved ? "fill-cyan-200" : ""}`} />
-          </button>
-        </div>
 
-        <p className="text-[14px] font-semibold text-white mt-2">{compactCount(post.likes_count)} Me gusta</p>
-        <p className="text-[14px] leading-5 text-white mt-1 whitespace-pre-line">
-          <span className="font-semibold mr-1">{post.username || "usuario"}</span>
-          <MentionText text={post.caption} />
-        </p>
-        {(post.mentions ?? []).length > 0 ? (
-          <div className="text-[14px] text-cyan-200 mt-1 flex flex-wrap gap-x-2 gap-y-1">
-            {(post.mentions ?? []).map((mention) => (
-              <Link
-                key={`${post.id}-m2-${mention}`}
-                href={`/${mention}`}
-                className="text-cyan-200 hover:text-cyan-100"
-              >
-                @{mention}
-              </Link>
-            ))}
-          </div>
-        ) : null}
-
-        <button onClick={onToggleComments} className="mt-1 text-[14px] text-gray-400 hover:text-gray-300 transition-colors">
-          Ver los {compactCount(post.comments_count)} comentarios
-        </button>
-
-        {hasCarousel ? (
-          <div className="mt-3 flex items-center justify-center gap-1.5">
-            {mediaList.map((_, index) => (
-              <button
-                key={`${post.id}-dot-${index}`}
-                onClick={() => setActiveMediaIndex(index)}
-                className={`h-1.5 w-1.5 rounded-full ${
-                  index === activeMediaIndex ? "bg-cyan-300" : "bg-white/35"
-                }`}
-                aria-label={`Ir a media ${index + 1}`}
-              />
-            ))}
-          </div>
-        ) : null}
-
-        {commentsOpen ? (
-          <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
-            <div className="space-y-2 max-h-40 overflow-auto pr-1">
-              {comments.length === 0 ? (
-                <p className="text-xs text-gray-400">Sin comentarios aun.</p>
-              ) : (
-                comments.map((comment) => (
-                  <div key={comment.id} className="frosted rounded-lg px-3 py-2">
-                    <p className="text-xs text-gray-400">{comment.user_id.slice(0, 8)}</p>
-                    <p className="text-sm text-white whitespace-pre-line">{comment.content}</p>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="flex gap-2">
+          {commentsEnabled ? (
+            <div className="ig-post-inline-composer">
               <input
                 value={commentInput}
                 onChange={(e) => onCommentInputChange(e.target.value)}
@@ -447,11 +284,138 @@ const FeedPostCard = ({
               <button onClick={onSubmitComment} className="text-cyan-300 hover:text-cyan-200 px-2 text-sm font-semibold">
                 Publicar
               </button>
+              <button onClick={onToggleComments} className="text-xs text-gray-400 hover:text-gray-300">
+                Ocultar
+              </button>
+            </div>
+          ) : (
+            <div className="ig-post-inline-composer">
+              <p className="text-xs text-gray-400">Los comentarios estan desactivados para esta publicacion.</p>
+              <button onClick={onToggleComments} className="text-xs text-gray-400 hover:text-gray-300 ml-auto">
+                Ocultar
+              </button>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {optionsOpen ? (
+        <div className="ig-post-options-overlay" onClick={() => (menuBusy ? null : setOptionsOpen(false))}>
+          <div className="ig-post-options-modal" onClick={(event) => event.stopPropagation()}>
+            {isOwnPost ? (
+              <>
+                <button type="button" disabled={menuBusy} className="ig-post-options-item is-danger" onClick={() => void handleDeletePost()}>
+                  {menuBusy ? "Eliminando..." : "Eliminar"}
+                </button>
+                <button type="button" className="ig-post-options-item" onClick={() => setEditingCaption(true)}>
+                  Editar
+                </button>
+                <button type="button" disabled={menuBusy} className="ig-post-options-item" onClick={() => void handleToggleHideLikes()}>
+                  {hideLikeCount ? "Mostrar recuento de Me gusta" : "Ocultar recuento de Me gusta"}
+                </button>
+                <button type="button" disabled={menuBusy} className="ig-post-options-item" onClick={() => void handleToggleCommentsAvailability()}>
+                  {commentsEnabled ? "Desactivar comentarios" : "Activar comentarios"}
+                </button>
+                <button type="button" className="ig-post-options-item" onClick={onOpenPost}>
+                  Ir a la publicacion
+                </button>
+                <button type="button" className="ig-post-options-item" onClick={onShare}>
+                  Compartir en...
+                </button>
+                <button type="button" className="ig-post-options-item" onClick={() => void handleCopyLink()}>
+                  Copiar enlace
+                </button>
+                <button type="button" className="ig-post-options-item" onClick={() => void handleCopyEmbed()}>
+                  Insertar
+                </button>
+                <button
+                  type="button"
+                  className="ig-post-options-item"
+                  onClick={() => {
+                    const targetUsername = (post.username ?? "").trim().toLowerCase();
+                    if (targetUsername) {
+                      void prefetchProfileRouteSnapshot(targetUsername, currentUserId ?? null);
+                    }
+                    setLocation(`/${post.username || "inicio"}`);
+                    setOptionsOpen(false);
+                  }}
+                >
+                  Informacion sobre esta cuenta
+                </button>
+                <button type="button" className="ig-post-options-item" onClick={() => setOptionsOpen(false)}>
+                  Cancelar
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" disabled={menuBusy} className="ig-post-options-item is-danger" onClick={() => void handleReportPost()}>
+                  {menuBusy ? "Enviando..." : "Reportar"}
+                </button>
+                <button type="button" disabled={menuBusy} className="ig-post-options-item is-danger" onClick={() => void handleToggleFollowFromMenu()}>
+                  {menuBusy ? "Procesando..." : "Deja de seguir"}
+                </button>
+                <button type="button" disabled={menuBusy} className="ig-post-options-item" onClick={() => void handleToggleFavorite()}>
+                  {isFavoriteAuthor ? "Quitar de favoritos" : "Agregar a favoritos"}
+                </button>
+                <button type="button" className="ig-post-options-item" onClick={onOpenPost}>
+                  Ir a la publicacion
+                </button>
+                <button type="button" className="ig-post-options-item" onClick={onShare}>
+                  Compartir en...
+                </button>
+                <button type="button" className="ig-post-options-item" onClick={() => void handleCopyLink()}>
+                  Copiar enlace
+                </button>
+                <button type="button" className="ig-post-options-item" onClick={() => void handleCopyEmbed()}>
+                  Insertar
+                </button>
+                <button
+                  type="button"
+                  className="ig-post-options-item"
+                  onClick={() => {
+                    const targetUsername = (post.username ?? "").trim().toLowerCase();
+                    if (targetUsername) {
+                      void prefetchProfileRouteSnapshot(targetUsername, currentUserId ?? null);
+                    }
+                    setLocation(`/${post.username || "inicio"}`);
+                    setOptionsOpen(false);
+                  }}
+                >
+                  Informacion sobre esta cuenta
+                </button>
+                <button type="button" className="ig-post-options-item" onClick={() => setOptionsOpen(false)}>
+                  Cancelar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {editingCaption ? (
+        <div className="ig-post-options-overlay" onClick={() => (menuBusy ? null : setEditingCaption(false))}>
+          <div className="ig-post-edit-modal" onClick={(event) => event.stopPropagation()}>
+            <h3 className="ig-post-edit-title">Editar publicacion</h3>
+            <textarea
+              value={captionDraft}
+              onChange={(event) => setCaptionDraft(event.target.value)}
+              className="ig-post-edit-textarea"
+              placeholder="Escribe una descripcion..."
+              rows={6}
+              maxLength={2200}
+            />
+            <div className="ig-post-edit-actions">
+              <button type="button" className="ig-post-edit-btn" onClick={() => setEditingCaption(false)} disabled={menuBusy}>
+                Cancelar
+              </button>
+              <button type="button" className="ig-post-edit-btn is-primary" onClick={() => void handleSaveCaption()} disabled={menuBusy}>
+                {menuBusy ? "Guardando..." : "Guardar"}
+              </button>
             </div>
           </div>
-        ) : null}
-      </div>
-    </Glass>
+        </div>
+      ) : null}
+    </article>
   );
 };
 

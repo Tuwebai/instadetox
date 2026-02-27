@@ -1,6 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { NAVIGATION_ITEMS } from "@/lib/utils";
 import { useAuth } from "@/lib/AuthContext";
+import BrandLogo from "@/components/BrandLogo";
 import { 
   Home, 
   Search, 
@@ -48,9 +49,9 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, onOpen, onClose }) => {
   return (
     <>
       {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-10 glass-dark p-4 flex justify-between items-center">
-        <h1 className="text-xl font-semibold">
-          <span className="bg-gradient-text">InstaDetox</span>
+      <div className="md:hidden fixed top-0 left-0 right-0 z-20 glass-dark p-4 flex justify-between items-center">
+        <h1>
+          <BrandLogo className="h-10" />
         </h1>
         <button onClick={onOpen} className="text-white">
           <Menu className="w-6 h-6" />
@@ -59,12 +60,12 @@ const MobileNav: React.FC<MobileNavProps> = ({ isOpen, onOpen, onClose }) => {
       
       {/* Mobile Menu */}
       <div 
-        className={`lg:hidden fixed inset-0 z-20 glass-dark transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out`}
+        className={`md:hidden fixed inset-0 z-30 glass-dark transform ${isOpen ? 'translate-x-0' : '-translate-x-full'} transition-transform duration-300 ease-in-out`}
       >
         <div className="flex flex-col h-full p-4">
           <div className="flex justify-between items-center mb-6">
-            <h1 className="text-xl font-semibold">
-              <span className="bg-gradient-text">InstaDetox</span>
+            <h1>
+              <BrandLogo className="h-10" />
             </h1>
             <button onClick={onClose} className="text-white">
               <X className="w-6 h-6" />
