@@ -59,6 +59,7 @@ function AppShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [location] = useLocation();
   const isStandaloneRoute = location === "/privacidad";
+  const isMessagesRoute = location === "/mensajes";
 
   return (
     <>
@@ -75,8 +76,12 @@ function AppShell() {
           ) : null}
 
           <main
-            className={`flex-1 px-3 sm:px-4 md:px-5 lg:px-8 py-4 sm:py-6 ${
-              isStandaloneRoute ? "pt-4 md:pt-4 md:ml-0" : "md:ml-[78px] pt-16 md:pt-0"
+            className={`flex-1 h-full ${
+              isStandaloneRoute
+                ? "px-3 sm:px-4 md:px-5 lg:px-8 py-4 sm:py-6 pt-4 md:pt-4 md:ml-0"
+                : isMessagesRoute
+                  ? "px-0 py-0 md:ml-[78px] pt-16 md:pt-0"
+                  : "px-3 sm:px-4 md:px-5 lg:px-8 py-4 sm:py-6 md:ml-[78px] pt-16 md:pt-0"
             }`}
           >
             <AppRoutes />
