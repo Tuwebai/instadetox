@@ -4,12 +4,13 @@ import MessagesEmptyState from "@/components/messages/MessagesEmptyState";
 import MessagesSidebar from "@/components/messages/MessagesSidebar";
 import MessagesThreadView from "@/components/messages/MessagesThreadView";
 import MessagesNewChatModal from "@/components/messages/MessagesNewChatModal";
-import { useMessagesInbox } from "@/hooks/useMessagesInbox";
+import { useMessagesInbox, type ReplyToPayload } from "@/hooks/useMessagesInbox";
 
 const Messages = () => {
   const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
+  const [replyingTo, setReplyingTo] = useState<ReplyToPayload | null>(null);
   const [inboxTab, setInboxTab] = useState<"primary" | "requests">("primary");
   const [newChatOpen, setNewChatOpen] = useState(false);
   const username = user?.username ?? "usuario";
@@ -82,11 +83,14 @@ const Messages = () => {
                 }}
                 onSend={() => {
                   const current = draft;
+                  const currentReply = replyingTo;
                   setDraft("");
+                  setReplyingTo(null);
                   notifyTyping(false);
-                  void sendMessage(current).then((success) => {
+                  void sendMessage(current, currentReply ?? undefined).then((success) => {
                     if (!success) {
                       setDraft(current);
+                      setReplyingTo(currentReply);
                       notifyTyping(current.trim().length > 0);
                     }
                   });
@@ -100,6 +104,9 @@ const Messages = () => {
                 onLoadOlderMessages={() => {
                   void loadOlderMessages();
                 }}
+                replyingTo={replyingTo}
+                onReply={(msg) => setReplyingTo({ id: msg.id, body: msg.body, senderId: msg.senderId, username: selectedConversation.username ?? null })}
+                onCancelReply={() => setReplyingTo(null)}
               />
             ) : loadingConversations ? null : (
               <MessagesEmptyState onStartMessage={() => setNewChatOpen(true)} />

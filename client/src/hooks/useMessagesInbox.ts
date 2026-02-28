@@ -14,12 +14,21 @@ interface ParticipantRow {
   conversation_id: string;
 }
 
+/** Estructura del replyTo persistido en payload.replyTo */
+export interface ReplyToPayload {
+  id: string;
+  body: string;
+  senderId: string;
+  username?: string | null;
+}
+
 interface MessageRow {
   id: string;
   conversation_id: string;
   sender_id: string;
   body: string;
   created_at: string;
+  payload?: { replyTo?: ReplyToPayload } | null;
 }
 
 export interface InboxConversation {
@@ -40,6 +49,8 @@ export interface InboxMessage {
   body: string;
   createdAt: string;
   deliveryState: "sending" | "sent" | "failed";
+  /** Presente si el mensaje es una respuesta a otro */
+  replyTo?: ReplyToPayload;
 }
 
 interface UseMessagesInboxParams {
@@ -691,7 +702,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         const response = await supabase
           .from("messages")
-          .select("id, conversation_id, sender_id, body, created_at")
+          .select("id, conversation_id, sender_id, body, created_at, payload")
           .eq("conversation_id", conversation_id)
           .order("created_at", { ascending: true })
           .limit(PAGE_SIZE);
@@ -707,6 +718,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         body: row.body,
         createdAt: row.created_at,
         deliveryState: "sent" as const,
+        replyTo: row.payload?.replyTo ?? undefined,
       }));
 
       const failedMessages = failedMessagesRef.current[conversation_id] ?? [];
@@ -773,7 +785,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   }, [hasMoreMessages, loadingOlderMessages, messages, selectedConversationId]);
 
   const sendMessage = useCallback(
-    async (body: string) => {
+    async (body: string, replyTo?: ReplyToPayload) => {
       if (!supabase || !userId || !selectedConversationId) return false;
       const trimmed = body.trim();
       if (!trimmed) return false;
@@ -787,6 +799,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         body: trimmed,
         createdAt: now,
         deliveryState: "sent", // Estado inmediato para UX fluida
+        replyTo,
       };
 
       // 1. Actualización Local Instantánea
@@ -808,12 +821,14 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
 
       // 3. Persistencia Silenciosa (Segundo plano)
       void (async () => {
+        const dbPayload = replyTo ? { replyTo } : undefined;
         const { error } = await supabase.from("messages").insert({
           id: finalId,
           conversation_id: selectedConversationId,
           sender_id: userId,
           body: trimmed,
-          created_at: now
+          created_at: now,
+          ...(dbPayload ? { payload: dbPayload } : {}),
         });
 
         if (error) {

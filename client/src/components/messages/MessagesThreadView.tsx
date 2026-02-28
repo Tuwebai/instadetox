@@ -1,6 +1,6 @@
-import { useRef, useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
-import { type InboxConversation, type InboxMessage } from "@/hooks/useMessagesInbox";
+import { type InboxConversation, type InboxMessage, type ReplyToPayload } from "@/hooks/useMessagesInbox";
 
 interface MessagesThreadViewProps {
   currentUserId: string | null;
@@ -19,6 +19,12 @@ interface MessagesThreadViewProps {
   onRetryFailedMessage: (messageId: string) => void;
   onUnsend: (messageId: string) => void;
   onLoadOlderMessages: () => void;
+  /** Mensaje al que se está respondiendo actualmente */
+  replyingTo: ReplyToPayload | null;
+  /** Callback cuando el usuario hace click en Responder en un mensaje */
+  onReply: (message: InboxMessage) => void;
+  /** Callback para cancelar el reply activo */
+  onCancelReply: () => void;
 }
 
 /** Fallback tipo Instagram cuando no hay avatar. */
@@ -61,6 +67,9 @@ const MessagesThreadView = ({
   onRetryFailedMessage,
   onUnsend,
   onLoadOlderMessages,
+  replyingTo,
+  onReply,
+  onCancelReply,
 }: MessagesThreadViewProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomAnchorRef = useRef<HTMLDivElement>(null);
@@ -250,12 +259,34 @@ const MessagesThreadView = ({
             // Clases de grupo prioritarias para border-radius
             const groupClass = isSingle ? "is-single" : isFirstInGroup ? "is-first" : isLastInGroup ? "is-last" : isMiddleInGroup ? "is-middle" : "";
 
+            // Mostrar timestamp separador solo si: mensaje tiene reply Y hay 15+ min respecto al anterior (o es el primero)
+            const showTimestampSep = Boolean(message.replyTo) && (
+              !prevMessage ||
+              (new Date(message.createdAt).getTime() - new Date(prevMessage.createdAt).getTime()) > 15 * 60 * 1000
+            );
+
             return (
-              <div
-                key={message.id}
-                id={`dm-msg-${message.id}`}
-                className={`ig-dm-bubble-row${mine ? " is-mine" : ""}${isLastInGroup ? " last-in-group" : ""}`}
-              >
+              <React.Fragment key={message.id}>
+
+                {/* TIMESTAMP SEPARADOR — Centrado en TODO el ancho del chat, como en IG */}
+                {showTimestampSep ? (
+                  <div className="ig-dm-timestamp-separator">
+                    <div className="ig-dm-timestamp-separator-wrap">
+                      <span
+                        className="ig-dm-timestamp-separator-label"
+                        dir="auto"
+                        style={{ "--x---base-line-clamp-line-height": "16px", "--x-lineHeight": "16px" } as React.CSSProperties}
+                      >
+                        {formatMessageTime(message.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div
+                  id={`dm-msg-${message.id}`}
+                  className={`ig-dm-bubble-row${mine ? " is-mine" : ""}${isLastInGroup ? " last-in-group" : ""}`}
+                >
                 {/* Avatar del otro usuario — solo en el último mensaje del grupo */}
                 {!mine ? (
                   <div className="ig-dm-msg-avatar-wrap" aria-hidden="true">
@@ -270,8 +301,36 @@ const MessagesThreadView = ({
                 ) : null}
 
                 <div className={`ig-dm-bubble-wrapper${mine ? " is-mine" : ""}`}>
+
+                  {/* REPLY: Label contextual "Respondiste a X" / "X respondió" */}
+                  {message.replyTo ? (
+                    <div className="ig-dm-reply-context-row">
+                      <span
+                        className="ig-dm-reply-context-label"
+                        dir="auto"
+                        style={{ "--x---base-line-clamp-line-height": "16px", "--x-lineHeight": "16px" } as React.CSSProperties}
+                      >
+                        {mine
+                          ? `Respondiste a ${message.replyTo.username ?? "usuario"}`
+                          : `${message.replyTo.username ?? "Usuario"} te respondió`}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {/* REPLY: Burbuja-fantasma del mensaje citado + borde sutil IG-style */}
+                  {message.replyTo ? (
+                    <div className={`ig-dm-reply-quoted-row${mine ? " is-mine" : ""}`}>
+                      <div className={`ig-dm-reply-quoted-bubble${mine ? " is-mine" : ""}`}>
+                        <p className="ig-dm-reply-quoted-body">{message.replyTo.body}</p>
+                      </div>
+                      {/* Borde sutil — hermano de la burbuja, replica x19g9edo xr9e8f9 x1e4oeot... del DOM de IG */}
+                      <div className="ig-dm-reply-quoted-border" />
+                    </div>
+                  ) : null}
+
+                  {/* BURBUJA PRINCIPAL + HOVER ACTIONS */}
                   <div className={`ig-dm-message-line${mine ? " is-mine" : ""}`}>
-                    <article className={`ig-dm-bubble ${groupClass} ${mine ? "is-mine" : ""}${message.deliveryState === "sending" ? " is-sending" : ""}`}>
+                    <article className={`ig-dm-bubble ${groupClass} ${mine ? "is-mine" : ""}${message.deliveryState === "sending" ? " is-sending" : ""}${message.replyTo ? " has-reply" : ""}`}>
                       <p>{message.body}</p>
                       {mine && message.deliveryState === "failed" ? (
                         <button
@@ -292,7 +351,12 @@ const MessagesThreadView = ({
                           <path d="M15.83 10.997a1.167 1.167 0 1 0 1.167 1.167 1.167 1.167 0 0 0-1.167-1.167Zm-6.5 1.167a1.167 1.167 0 1 0-1.166 1.167 1.167 1.167 0 0 0 1.166-1.167Zm5.163 3.24a3.406 3.406 0 0 1-4.982.007 1 1 0 1 0-1.557 1.256 5.397 5.397 0 0 0 8.09 0 1 1 0 0 0-1.55-1.263ZM12 .503a11.5 11.5 0 1 0 11.5 11.5A11.513 11.513 0 0 0 12 .503Zm0 21a9.5 9.5 0 1 1 9.5-9.5 9.51 9.51 0 0 1-9.5 9.5Z"></path>
                         </svg>
                       </button>
-                      <button type="button" className="ig-dm-hover-btn" aria-label="Responder">
+                      <button type="button" className="ig-dm-hover-btn" aria-label="Responder"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onReply(message);
+                        }}
+                      >
                         <svg aria-label="Responder mensaje" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
                           <title>Responder</title>
                           <path d="M14 8.999H4.413l5.294-5.292a1 1 0 1 0-1.414-1.414l-7 6.998c-.014.014-.019.033-.032.048A.933.933 0 0 0 1 9.998V10c0 .027.013.05.015.076a.907.907 0 0 0 .282.634l6.996 6.998a1 1 0 0 0 1.414-1.414L4.415 11H14a7.008 7.008 0 0 1 7 7v3.006a1 1 0 0 0 2 0V18a9.01 9.01 0 0 0-9-9Z"></path>
@@ -389,8 +453,9 @@ const MessagesThreadView = ({
                       {formatSeenTime(peerSeenAt)}
                     </span>
                   )}
-                </div>
-              </div>
+                </div>{/* /ig-dm-bubble-wrapper */}
+                </div>{/* /ig-dm-bubble-row */}
+              </React.Fragment>
             );
           })
         )}
@@ -429,6 +494,26 @@ const MessagesThreadView = ({
             </button>
           </div>
           <div className="ig-dm-composer-input">
+            {replyingTo ? (
+              <div className="ig-dm-reply-banner">
+                <div className="ig-dm-reply-banner-content">
+                  <span className="ig-dm-reply-banner-label">
+                    Respondiendo a <strong>{replyingTo.username ?? "Usuario"}</strong>
+                  </span>
+                  <p className="ig-dm-reply-banner-body">{replyingTo.body}</p>
+                </div>
+                <button
+                  type="button"
+                  className="ig-dm-reply-cancel-btn"
+                  onClick={onCancelReply}
+                  aria-label="Cancelar respuesta"
+                >
+                  <svg fill="currentColor" height="12" viewBox="0 0 24 24" width="12" aria-hidden="true">
+                    <path d="M19.71 18.29l-5.3-5.3 5.3-5.3a1 1 0 0 0-1.42-1.42l-5.3 5.3-5.3-5.3A1 1 0 0 0 6.29 7.71l5.3 5.3-5.3 5.3a1 1 0 0 0 1.42 1.42l5.3-5.3 5.3 5.3a1 1 0 0 0 1.42-1.42z" />
+                  </svg>
+                </button>
+              </div>
+            ) : null}
             <textarea
               rows={1}
               value={draft}

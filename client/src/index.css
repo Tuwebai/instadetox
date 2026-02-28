@@ -2737,6 +2737,168 @@
   color: var(--always-gray-95);
 }
 
+/* === REPLY / RESPONDER — Paridad Instagram === */
+
+/* Timestamp separador centrado en todo el ancho del chat — idéntico al de IG */
+/* Se muestra solo antes de un reply cuando hay 15+ min con el mensaje anterior   */
+.ig-dm-timestamp-separator {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  padding: 8px 0 6px;
+}
+
+.ig-dm-timestamp-separator-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ig-dm-timestamp-separator-label {
+  font-size: 12px;
+  line-height: var(--x-lineHeight, 16px);
+  color: var(--secondary-label);
+  font-weight: 400;
+}
+
+/* Label contextual "Respondiste a X" / "X respondió" */
+.ig-dm-reply-context-row {
+  display: flex;
+  align-items: center;
+  padding: 0 4px 3px 4px;
+}
+
+.ig-dm-bubble-wrapper.is-mine .ig-dm-reply-context-row {
+  justify-content: flex-end;
+}
+
+.ig-dm-reply-context-label {
+  font-size: 12px;
+  line-height: var(--x-lineHeight, 16px);
+  color: var(--secondary-label);
+}
+
+/* Fila de la burbuja-fantasma del mensaje citado */
+/* Fila que contiene la burbuja citada + la barra vertical | al costado */
+.ig-dm-reply-quoted-row {
+  display: flex;
+  flex-direction: row-reverse; /* mensajes recibidos: [bar] [bubble] → barra a la IZQUIERDA */
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 8px;
+  width: fit-content; /* no expandir al ancho completo del wrapper */
+}
+
+/* Para mensajes propios: [bubble] [bar] → barra a la DERECHA */
+.ig-dm-reply-quoted-row.is-mine {
+  flex-direction: row;
+  justify-content: flex-end;
+}
+
+/* Burbuja del mensaje citado — paridad exacta con el DOM de IG */
+.ig-dm-reply-quoted-bubble {
+  border-radius: 18px;
+  padding: 8px 12px;
+  max-width: 220px;
+  cursor: pointer;
+  overflow: hidden;           /* x19livfd — recorta el contenido si excede */
+  background: var(--chat-incoming-message-bubble-background-color, rgba(255,255,255,0.08));
+}
+
+.ig-dm-reply-quoted-bubble.is-mine {
+  background: rgba(0, 149, 246, 0.35);
+}
+
+/* Texto del mensaje citado — x13fuv20 x18b5jzi x1q0q8m5 x1t7ytsu x5n08af */
+.ig-dm-reply-quoted-body {
+  font-size: 15px;            /* x13fuv20 */
+  line-height: 20px;          /* x18b5jzi */
+  margin: 0;
+  color: var(--primary-text);
+  opacity: 0.7;               /* x3p3xfz / xet2kk3 — dimmed */
+  white-space: nowrap;        /* x5n08af — trunca en 1 línea */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 180px;
+}
+
+/*
+ * Barra vertical | — replica el div vacío de IG: x19g9edo xr9e8f9 x1e4oeot x1ui04y5...
+ * Es el "palo parado" al lado del mensaje citado.
+ */
+.ig-dm-reply-quoted-border {
+  width: 3px;
+  border-radius: 3px;
+  background: var(--secondary-label, rgba(128, 128, 128, 0.6));
+  flex-shrink: 0;
+  align-self: stretch;
+  min-height: 20px;
+}
+
+
+/* La burbuja de respuesta tiene radio superior reducido cuando hay reply */
+.ig-dm-bubble.has-reply {
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
+}
+
+/* Banner "Respondiendo a @username" sobre el textarea */
+.ig-dm-reply-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 12px 6px 12px;
+  border-top: 1px solid var(--ig-separator);
+  background-color: var(--ig-primary-background);
+}
+
+.ig-dm-reply-banner-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.ig-dm-reply-banner-label {
+  font-size: 12px;
+  color: var(--secondary-label);
+}
+
+.ig-dm-reply-banner-label strong {
+  font-weight: 600;
+  color: var(--primary-text);
+}
+
+.ig-dm-reply-banner-body {
+  font-size: 12px;
+  margin: 0;
+  color: var(--secondary-label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ig-dm-reply-cancel-btn {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--secondary-icon);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background-color 0.15s ease;
+}
+
+.ig-dm-reply-cancel-btn:hover {
+  background-color: var(--hover-overlay);
+}
+
 /* MENÚ DESPLEGABLE (Instagram Style) */
 .ig-dm-more-menu-container {
   position: absolute;
