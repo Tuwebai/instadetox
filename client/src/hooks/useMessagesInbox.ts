@@ -149,6 +149,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   const [seenByCountByConversation, setSeenByCountByConversation] = useState<Record<string, number>>({});
   const hasBootstrappedRef = useRef(false);
   const messagesCacheRef = useRef<Record<string, InboxMessage[]>>({});
+  const participantsByConversationRef = useRef<Record<string, string[]>>({});
 
   // Carga inicial síncrona de cache mensaje para evitar IIFE compleja en useRef
   useEffect(() => {
@@ -183,33 +184,17 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     return Array.from(map.values()).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   };
 
-  const loadUnreadCounts = useCallback(
-    async (conversationIds: string[]) => {
-      if (!supabase || !userId || conversationIds.length === 0) {
-        setUnreadByConversation({});
-        return;
-      }
-
-      const { data } = await supabase.rpc("get_unread_counts", {
-        p_conversation_ids: conversationIds,
-      });
-
-      const next = ((data ?? []) as Array<{ conversation_id: string; unread_count: number }>).reduce<Record<string, number>>(
-        (acc, row) => {
-          acc[row.conversation_id] = Math.max(0, Number(row.unread_count ?? 0));
-          return acc;
-        },
-        {},
+  const moveConversationToTopWithPreview = useCallback((conversationId: string, preview: string, updatedAt: string) => {
+    setConversations((prev) => {
+      const next = prev.map((conversation) =>
+        conversation.id === conversationId
+          ? { ...conversation, preview, previewAt: updatedAt, updatedAt }
+          : conversation,
       );
-
-      if (selectedConversationId) {
-        next[selectedConversationId] = 0;
-      }
-
-      setUnreadByConversation(next);
-    },
-    [selectedConversationId, userId],
-  );
+      next.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      return next;
+    });
+  }, []);
 
   const markConversationSeen = useCallback(
     async (conversationId: string) => {
@@ -256,62 +241,6 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     [userId],
   );
 
-  const loadPeerSeenAt = useCallback(
-    async (conversationId: string) => {
-      if (!supabase || !userId) return;
-
-      const { data } = await supabase
-        .from("conversation_reads")
-        .select("seen_at")
-        .eq("conversation_id", conversationId)
-        .neq("user_id", userId)
-        .order("seen_at", { ascending: false })
-        .limit(1);
-
-      const latestSeenAt =
-        Array.isArray(data) && data.length > 0 && typeof data[0]?.seen_at === "string"
-          ? data[0].seen_at
-          : null;
-
-      setPeerSeenAtByConversation((prev) => ({ ...prev, [conversationId]: latestSeenAt }));
-    },
-    [userId],
-  );
-
-  const loadSeenByCount = useCallback(
-    async (conversationId: string, lastOwnSentAt: string | null) => {
-      if (!supabase || !userId || !lastOwnSentAt) {
-        setSeenByCountByConversation((prev) => ({ ...prev, [conversationId]: 0 }));
-        return;
-      }
-
-      const { data } = await supabase
-        .from("conversation_reads")
-        .select("user_id")
-        .eq("conversation_id", conversationId)
-        .neq("user_id", userId)
-        .gte("seen_at", lastOwnSentAt);
-
-      setSeenByCountByConversation((prev) => ({
-        ...prev,
-        [conversationId]: Array.isArray(data) ? data.length : 0,
-      }));
-    },
-    [userId],
-  );
-
-  const moveConversationToTopWithPreview = useCallback((conversationId: string, preview: string, updatedAt: string) => {
-    setConversations((prev) => {
-      const next = prev.map((conversation) =>
-        conversation.id === conversationId
-          ? { ...conversation, preview, previewAt: updatedAt, updatedAt }
-          : conversation,
-      );
-      next.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
-      return next;
-    });
-  }, []);
-
   const loadConversations = useCallback(async (options?: { silent?: boolean }) => {
     if (!supabase || !userId) {
       if (hasBootstrappedRef.current) {
@@ -353,7 +282,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
 
       if (conversationIds.length === 0) {
         setConversations([]);
-        if (selectedConversationId) {
+        if (selectedConversationIdRef.current) {
           setLocation("/direct/inbox");
         }
         setSelectedConversationId(null);
@@ -391,6 +320,9 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         preview: null,
         previewAt: null,
         avatarUrl: null,
+        avatar_url: null,
+        full_name: null,
+        username: null,
       }));
 
       const { data: participantDetailRows } = await supabase
@@ -507,19 +439,127 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       setConversations(nextConversations);
       setOtherParticipantCountByConversation(nextOtherParticipantCountByConversation);
       setRequestConversationIds(nextRequestConversationIds);
-      if (!urlConversationId && nextConversations.length > 0) {
-        const id = nextConversations[0]?.id;
-        if (id) {
-           setSelectedConversationId(null); // Deja la URI en /direct/inbox explicitamente.
-        }
-      }
       
-      void loadUnreadCounts(nextConversations.map((row) => row.id));
+      // Guardar participantes para broadcast de realtime
+      const participantIdsMap: Record<string, string[]> = {};
+      participantRowsByConversation.forEach((ids, convId) => {
+        participantIdsMap[convId] = ids;
+      });
+      participantsByConversationRef.current = participantIdsMap;
+
+      // Carga asíncrona de no leídos
+      if (typeof loadUnreadCounts !== "undefined") {
+        void loadUnreadCounts(nextConversations.map((row) => row.id));
+      }
     } finally {
       setLoadingConversations(false);
       hasBootstrappedRef.current = true;
     }
-  }, [loadUnreadCounts, userId]);
+  }, [supabase, userId]);
+ // Removido loadUnreadCounts de dependencias para evitar circularidad masiva si fuera necesario, pero loadUnreadCounts ya es estable.
+
+  const loadUnreadCounts = useCallback(
+    async (conversationIds: string[]) => {
+      if (!supabase || !userId || conversationIds.length === 0) {
+        setUnreadByConversation({});
+        return;
+      }
+
+      const { data } = await supabase.rpc("get_unread_counts", {
+        p_conversation_ids: conversationIds,
+      });
+
+      const next = ((data ?? []) as Array<{ conversation_id: string; unread_count: number }>).reduce<Record<string, number>>(
+        (acc, row) => {
+          acc[row.conversation_id] = Math.max(0, Number(row.unread_count ?? 0));
+          return acc;
+        },
+        {},
+      );
+
+      if (selectedConversationIdRef.current) {
+        next[selectedConversationIdRef.current] = 0;
+      }
+
+      setUnreadByConversation(next);
+    },
+    [userId],
+  );
+
+  const loadPeerSeenAt = useCallback(
+    async (conversationId: string) => {
+      if (!supabase || !userId) return;
+
+      const { data } = await supabase
+        .from("conversation_reads")
+        .select("seen_at")
+        .eq("conversation_id", conversationId)
+        .neq("user_id", userId)
+        .order("seen_at", { ascending: false })
+        .limit(1);
+
+      const latestSeenAt =
+        Array.isArray(data) && data.length > 0 && typeof data[0]?.seen_at === "string"
+          ? data[0].seen_at
+          : null;
+
+      setPeerSeenAtByConversation((prev) => ({ ...prev, [conversationId]: latestSeenAt }));
+    },
+    [userId],
+  );
+
+  const loadSeenByCount = useCallback(
+    async (conversationId: string, lastOwnSentAt: string | null) => {
+      if (!supabase || !userId || !lastOwnSentAt) {
+        setSeenByCountByConversation((prev) => ({ ...prev, [conversationId]: 0 }));
+        return;
+      }
+
+      const { data } = await supabase
+        .from("conversation_reads")
+        .select("user_id")
+        .eq("conversation_id", conversationId)
+        .neq("user_id", userId)
+        .gte("seen_at", lastOwnSentAt);
+
+      setSeenByCountByConversation((prev) => ({
+        ...prev,
+        [conversationId]: Array.isArray(data) ? data.length : 0,
+      }));
+    },
+    [userId],
+  );
+
+  // --- LÓGICA DE ACTUALIZACIÓN UNIVERSAL (SIDEBAR + THREAD) ---
+  const handleInboundMessage = useCallback((msg: InboxMessage) => {
+    // 1. Actualización inmediata del preview del Sidebar (0ms feel)
+    moveConversationToTopWithPreview(msg.conversationId, msg.body, msg.createdAt);
+
+    // 2. Si el chat está abierto, hidratar el hilo
+    if (selectedConversationIdRef.current === msg.conversationId) {
+      if (msg.senderId !== userId) {
+        void markConversationSeen(msg.conversationId);
+      }
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        const next = [...prev, msg].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
+        messagesCacheRef.current[msg.conversationId] = next;
+        return next;
+      });
+    } else if (msg.senderId !== userId) {
+      // 3. Si no está abierto, incrementar contador de no leídos
+      setUnreadByConversation((prev) => ({
+        ...prev,
+        [msg.conversationId]: (prev[msg.conversationId] ?? 0) + 1,
+      }));
+    }
+
+    // 4. Refresco silencioso de la lista completa (Garantía SSOT)
+    void loadConversations({ silent: true });
+  }, [loadConversations, markConversationSeen, moveConversationToTopWithPreview, userId]);
+
 
   const searchNewMessageCandidates = useCallback(
     async (query: string) => {
@@ -798,49 +838,79 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         senderId: userId,
         body: trimmed,
         createdAt: now,
-        deliveryState: "sent", // Estado inmediato para UX fluida
+        deliveryState: "sending", // Estado inicial de envío (0ms UX)
         replyTo,
       };
 
-      // 1. Actualización Local Instantánea
+      // 1. Actualización Local Instantánea (0ms)
       setMessages((prev) => [...prev, message]);
-      messagesCacheRef.current[selectedConversationId] = [
-        ...(messagesCacheRef.current[selectedConversationId] ?? []),
-        message,
-      ];
+      const currentHilo = messagesCacheRef.current[selectedConversationId] ?? [];
+      messagesCacheRef.current[selectedConversationId] = [...currentHilo, message];
       moveConversationToTopWithPreview(selectedConversationId, trimmed, now);
 
-      // 2. BROADCAST PARALELO (0ms delay)
+      // 2. BROADCAST MULTI-CANAL (Background)
+      const peers = (participantsByConversationRef.current[selectedConversationId] ?? [])
+        .filter(id => id !== userId);
+
+      const broadcastMessage = {
+        type: "broadcast",
+        event: "new_message",
+        payload: { ...message, deliveryState: "sent" } // Los demás lo reciben como 'sent'
+      } as const;
+
+      // A la conversación activa
       if (typingChannelRef.current && typingChannelRef.current.state === "joined") {
-        void typingChannelRef.current.send({
-          type: "broadcast",
-          event: "new_message",
-          payload: message
-        });
+        void typingChannelRef.current.send(broadcastMessage);
       }
 
-      // 3. Persistencia Silenciosa (Segundo plano)
-      void (async () => {
-        const dbPayload = replyTo ? { replyTo } : undefined;
-        const { error } = await supabase.from("messages").insert({
-          id: finalId,
-          conversation_id: selectedConversationId,
-          sender_id: userId,
-          body: trimmed,
-          created_at: now,
-          ...(dbPayload ? { payload: dbPayload } : {}),
+      // A los Inbox de los peers (Realtime Sidebar Everywhere)
+      peers.forEach(peerId => {
+        if (!supabase) return;
+        const peerInboxChannel = supabase.channel(`inbox:${peerId}`);
+        peerInboxChannel.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            void peerInboxChannel.send(broadcastMessage).then(() => {
+              if (supabase) void supabase.removeChannel(peerInboxChannel);
+            });
+          }
         });
+      });
 
-        if (error) {
-          console.error("Error persistencia mensaje:", error);
-          setMessages((prev) =>
-            prev.map((m) => (m.id === finalId ? { ...m, deliveryState: "failed" } : m)),
-          );
-        } else {
-          void supabase
-            .from("conversations")
-            .update({ updated_at: now })
-            .eq("id", selectedConversationId);
+      // 3. Persistencia en Segundo Plano (Silenciosa)
+      void (async () => {
+        if (!supabase) return;
+        const dbPayload = replyTo ? { replyTo } : undefined;
+        try {
+          const { error } = await supabase.from("messages").insert({
+            id: finalId,
+            conversation_id: selectedConversationId,
+            sender_id: userId,
+            body: trimmed,
+            created_at: now,
+            ...(dbPayload ? { payload: dbPayload } : {}),
+          });
+
+          if (error) throw error;
+
+          // Éxito: Actualizar a "sent" en estado y cache
+          const markSent = (prev: InboxMessage[]) => 
+            prev.map(m => m.id === finalId ? { ...m, deliveryState: "sent" as const } : m);
+          
+          setMessages(markSent);
+          if (messagesCacheRef.current[selectedConversationId]) {
+            messagesCacheRef.current[selectedConversationId] = markSent(messagesCacheRef.current[selectedConversationId]);
+          }
+
+          void supabase.from("conversations").update({ updated_at: now }).eq("id", selectedConversationId);
+        } catch (error) {
+          console.error("Error persistencia mensaje (Background):", error);
+          const markFailed = (prev: InboxMessage[]) => 
+            prev.map(m => m.id === finalId ? { ...m, deliveryState: "failed" as const } : m);
+          
+          setMessages(markFailed);
+          if (messagesCacheRef.current[selectedConversationId]) {
+            messagesCacheRef.current[selectedConversationId] = markFailed(messagesCacheRef.current[selectedConversationId]);
+          }
         }
       })();
 
@@ -946,25 +1016,8 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
 
     globalChannel.on("broadcast", { event: "new_message" }, ({ payload }) => {
       const msg = payload as InboxMessage | null;
-      if (!msg || !msg.id || !msg.conversationId) return;
-
-      moveConversationToTopWithPreview(msg.conversationId, msg.body, msg.createdAt);
-
-      if (selectedConversationIdRef.current === msg.conversationId) {
-        void markConversationSeen(msg.conversationId);
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === msg.id)) return prev;
-          const next = [...prev, msg].sort(
-            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          );
-          messagesCacheRef.current[msg.conversationId] = next;
-          return next;
-        });
-      } else {
-        setUnreadByConversation((prev) => ({
-          ...prev,
-          [msg.conversationId]: (prev[msg.conversationId] ?? 0) + 1,
-        }));
+      if (msg && msg.id && msg.conversationId) {
+        handleInboundMessage(msg);
       }
     });
 
@@ -984,49 +1037,21 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     globalChannel.subscribe();
 
     const handleMessageEvent = (payload: RealtimePostgresChangesPayload<MessageRow>) => {
-      const isInsert = payload.eventType === "INSERT";
-      const row = isInsert ? payload.new : payload.old;
-      const rawConversationId = row?.conversation_id;
-      const rawSenderId = row?.sender_id;
-
-      if (typeof rawConversationId !== "string") return;
-      const currentConversationId = selectedConversationIdRef.current;
-
-      if (isInsert) {
+      if (payload.eventType === "INSERT") {
+        const row = payload.new;
         const msg: InboxMessage = {
           id: row.id!,
-          conversationId: rawConversationId,
-          senderId: rawSenderId!,
+          conversationId: row.conversation_id!,
+          senderId: row.sender_id!,
           body: row.body!,
           createdAt: row.created_at!,
           deliveryState: "sent"
         };
-
-        moveConversationToTopWithPreview(msg.conversationId, msg.body, msg.createdAt);
-
-        if (currentConversationId === msg.conversationId) {
-          if (msg.senderId !== userId) {
-            void markConversationSeen(msg.conversationId);
-          }
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === msg.id)) return prev;
-            const next = [...prev, msg].sort(
-              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-            );
-            messagesCacheRef.current[msg.conversationId] = next;
-            return next;
-          });
-        } else if (msg.senderId !== userId) {
-          setUnreadByConversation((prev) => ({
-            ...prev,
-            [msg.conversationId]: (prev[msg.conversationId] ?? 0) + 1,
-          }));
-        }
+        handleInboundMessage(msg);
       } else {
-        // DELETE o UPDATE
         void loadConversations({ silent: true });
-        if (currentConversationId === rawConversationId) {
-          void loadMessages(rawConversationId, { silent: true });
+        if (selectedConversationIdRef.current === (payload.old as MessageRow)?.conversation_id) {
+          void loadMessages(selectedConversationIdRef.current!, { silent: true });
         }
       }
     };
@@ -1063,9 +1088,9 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     );
 
     return () => {
-      void client.removeChannel(globalChannel);
+      if (globalChannel) void client.removeChannel(globalChannel);
     };
-  }, [loadConversations, loadMessages, loadPeerSeenAt, markConversationSeen, moveConversationToTopWithPreview, userId]);
+  }, [handleInboundMessage, loadConversations, loadMessages, loadPeerSeenAt, markConversationSeen, moveConversationToTopWithPreview, userId]);
 
   useEffect(() => {
     if (!supabase || !selectedConversationId || !userId) return;
@@ -1172,6 +1197,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       .find((m) => m.senderId === userId && m.deliveryState === "sent")?.createdAt ?? null;
     void loadSeenByCount(selectedConversationId, latestOwnSentAt);
   }, [loadPeerSeenAt, loadSeenByCount, markConversationSeen, selectedConversationId, userId]);
+
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedConversationId) ?? null,

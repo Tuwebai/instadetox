@@ -33,7 +33,11 @@ const FeedPostHeader = ({
   return (
     <header className="ig-post-header">
       <div className="ig-post-avatar">
-        {avatarUrl ? <img src={avatarUrl} alt={username ?? "avatar"} className="h-full w-full object-cover" /> : null}
+        <img 
+          src={avatarUrl || "/avatar_fallback.jpg"} 
+          alt={username ?? "avatar"} 
+          className="h-full w-full object-cover bg-white/10" 
+        />
       </div>
       <div className="min-w-0 flex-1">
         <div className="ig-post-userline">

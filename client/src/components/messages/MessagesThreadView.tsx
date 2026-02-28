@@ -75,6 +75,7 @@ const MessagesThreadView = ({
   const bottomAnchorRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(messages.length);
   const latestPeerMsgIdRef = useRef<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   /** ID del mensaje que tiene el menú "Más" abierto */
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
@@ -87,6 +88,13 @@ const MessagesThreadView = ({
     }
     return () => window.removeEventListener("click", handleClickOutside);
   }, [activeMenuId]);
+
+  // Autofocus en el textarea al activar el modo reply
+  useEffect(() => {
+    if (replyingTo) {
+      textareaRef.current?.focus();
+    }
+  }, [replyingTo]);
 
   /** Mensajes nuevos del peer que el user no ha visto (está scrolleado arriba) */
   const [unreadPeerCount, setUnreadPeerCount] = useState(0);
@@ -537,6 +545,7 @@ const MessagesThreadView = ({
           </div>
           <div className="ig-dm-composer-input">
             <textarea
+              ref={textareaRef}
               rows={1}
               value={draft}
               onChange={(event) => {

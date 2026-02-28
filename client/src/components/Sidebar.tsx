@@ -150,24 +150,12 @@ const Sidebar = () => {
     const isProfileItem = itemPath === profilePath;
 
     if (isProfileItem) {
-      if (user?.avatar_url) {
-        return (
-          <img
-            src={user.avatar_url}
-            alt={`Avatar de ${user.username || "usuario"}`}
-            className="w-7 h-7 rounded-full object-cover"
-          />
-        );
-      }
-
-      const usernameInitial = (user?.username ?? "U").trim().charAt(0).toUpperCase();
       return (
-        <span
-          aria-hidden
-          className="w-7 h-7 rounded-full bg-white/10 text-white text-xs font-semibold grid place-items-center"
-        >
-          {usernameInitial}
-        </span>
+        <img
+          src={user?.avatar_url || "/avatar_fallback.jpg"}
+          alt={`Avatar de ${user?.username || "usuario"}`}
+          className="w-7 h-7 rounded-full object-cover bg-white/10"
+        />
       );
     }
 

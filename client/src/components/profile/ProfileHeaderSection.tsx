@@ -81,13 +81,11 @@ const ProfileHeaderSection = ({
                 aria-label={isOwnProfile ? "Cambiar foto del perfil" : "Foto de perfil"}
                 title={isOwnProfile ? "Cambiar foto del perfil" : undefined}
               >
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt={username} className="inst-profile-avatar-img" />
-                ) : (
-                  <span className="inst-profile-avatar-fallback" aria-hidden>
-                    <User size={52} />
-                  </span>
-                )}
+                <img 
+                  src={avatarUrl || "/avatar_fallback.jpg"} 
+                  alt={username} 
+                  className="inst-profile-avatar-img bg-white/10" 
+                />
               </button>
             </div>
           </div>

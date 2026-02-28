@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from "react";
 import type { supabase as supabaseClient } from "@/lib/supabase";
+import { apiFetch } from "@/lib/api";
 
 interface ModalPost {
   id: string;
@@ -117,7 +118,7 @@ export const useProfilePostModalActions = <TPost extends ProfilePostPatchable>({
   invalidateSavedTab,
 }: UseProfilePostModalActionsParams<TPost>) => {
   const handleModalToggleLike = useCallback(async () => {
-    if (!supabase || !user?.id || !modalPost || modalLikeBusy) return;
+    if (!user?.id || !modalPost || modalLikeBusy) return;
     const currentlyLiked = modalLikedByMe;
     setModalLikeBusy(true);
     setModalLikedByMe(!currentlyLiked);
@@ -127,8 +128,9 @@ export const useProfilePostModalActions = <TPost extends ProfilePostPatchable>({
     }));
 
     if (currentlyLiked) {
-      const { error } = await supabase.from("post_likes").delete().eq("post_id", modalPost.id).eq("user_id", user.id);
-      if (error) {
+      try {
+        await apiFetch(`/api/posts/${modalPost.id}/like`, { method: "DELETE" });
+      } catch (err) {
         setModalLikedByMe(true);
         patchPostAcrossTabs(modalPost.id, (post) => ({ ...post, likes_count: post.likes_count + 1 }));
         toast({ title: "Error", description: "No se pudo quitar el like." });
@@ -137,16 +139,15 @@ export const useProfilePostModalActions = <TPost extends ProfilePostPatchable>({
       return;
     }
 
-    const { error } = await supabase
-      .from("post_likes")
-      .upsert({ post_id: modalPost.id, user_id: user.id }, { onConflict: "post_id,user_id", ignoreDuplicates: true });
-    if (error) {
+    try {
+      await apiFetch(`/api/posts/${modalPost.id}/like`, { method: "POST" });
+    } catch (err) {
       setModalLikedByMe(false);
       patchPostAcrossTabs(modalPost.id, (post) => ({ ...post, likes_count: Math.max(0, post.likes_count - 1) }));
       toast({ title: "Error", description: "No se pudo dar like." });
     }
     setModalLikeBusy(false);
-  }, [modalLikeBusy, modalLikedByMe, modalPost, patchPostAcrossTabs, setModalLikeBusy, setModalLikedByMe, supabase, toast, user?.id]);
+  }, [modalLikeBusy, modalLikedByMe, modalPost, patchPostAcrossTabs, setModalLikeBusy, setModalLikedByMe, toast, user?.id]);
 
   const handleModalToggleSave = useCallback(async () => {
     if (!supabase || !user?.id || !modalPost || modalSaveBusy) return;
@@ -270,13 +271,19 @@ export const useProfilePostModalActions = <TPost extends ProfilePostPatchable>({
     }
     patchPostAcrossTabs(modalPost.id, (post) => ({ ...post, comments_count: post.comments_count + 1 }));
 
-    const { data, error } = await supabase
-      .from("post_comments")
-      .insert({ id: clientCommentId, post_id: modalPost.id, user_id: user.id, parent_id: activeReplyTarget?.commentId ?? null, content })
-      .select("id, user_id, parent_id, content, created_at")
-      .maybeSingle();
-
-    if (error || !data) {
+    let commentData: any = null;
+    try {
+      const response = await apiFetch(`/api/posts/${modalPost.id}/comment`, {
+        method: "POST",
+        body: JSON.stringify({
+          content,
+          parent_id: activeReplyTarget?.commentId ?? null,
+          client_id: clientCommentId
+        })
+      });
+      commentData = response?.data;
+      if (!commentData) throw new Error("No data returned");
+    } catch (err: any) {
       setModalCommentsByPost((prev) => ({
         ...prev,
         [modalPost.id]: (prev[modalPost.id] ?? []).filter((comment) => comment.id !== clientCommentId),
@@ -288,8 +295,8 @@ export const useProfilePostModalActions = <TPost extends ProfilePostPatchable>({
         }));
       }
       patchPostAcrossTabs(modalPost.id, (post) => ({ ...post, comments_count: Math.max(0, post.comments_count - 1) }));
-      const message = String(error?.message ?? "").toLowerCase();
-      const blockedByPolicy = message.includes("row-level security") || message.includes("comments_insert_self");
+      const message = String(err?.message ?? "").toLowerCase();
+      const blockedByPolicy = message.includes("row-level security") || message.includes("comments_insert_self") || message.includes("disabled");
       if (blockedByPolicy) {
         patchPostAcrossTabs(modalPost.id, (post) => ({ ...post, comments_enabled: false }));
         toast({ title: "Comentarios desactivados", description: "Esta publicación no acepta comentarios." });
@@ -306,8 +313,8 @@ export const useProfilePostModalActions = <TPost extends ProfilePostPatchable>({
           comment.id === clientCommentId
             ? {
                 ...comment,
-                parent_id: (data.parent_id as string | null) ?? comment.parent_id,
-                created_at: data.created_at as string,
+                parent_id: (commentData.parent_id as string | null) ?? comment.parent_id,
+                created_at: commentData.created_at as string,
               }
             : comment,
         ),

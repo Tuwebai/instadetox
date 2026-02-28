@@ -6,6 +6,7 @@ import DailyBook from "@/components/DailyBook";
 import RightPanel from "@/components/RightPanel";
 import Footer from "@/components/Footer";
 import FeedPostCard, { FeedPostCardRow, FeedPostComment } from "@/components/feed/FeedPostCard";
+import FeedTextPostCard from "@/components/feed/FeedTextPostCard";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -72,7 +73,7 @@ const Home = () => {
     [],
   );
 
-  useFeedPostRealtime({ supabaseClient: supabase, setFeed });
+  useFeedPostRealtime({ supabaseClient: supabase, userId: user?.id, setFeed });
 
   const fetchFeedBatch = useCallback(
     async (cursor: FeedCursor | null, append: boolean) => {
@@ -952,30 +953,9 @@ const Home = () => {
   };
 
   const visibleFeed = useMemo(() => {
-    if (feedMode === "recent") {
-      return [...feed].sort((a, b) => {
-        const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        if (timeDiff !== 0) return timeDiff;
-        return b.id.localeCompare(a.id);
-      });
-    }
-
-    // Ranking base: engagement ponderado + recencia (half-life 24h)
-    const now = Date.now();
-    const halfLifeMs = 24 * 60 * 60 * 1000;
-
     return [...feed].sort((a, b) => {
-      const score = (post: FeedPostCardRow) => {
-        const ageMs = Math.max(1, now - new Date(post.created_at).getTime());
-        const recencyFactor = Math.pow(0.5, ageMs / halfLifeMs);
-        const engagement = post.likes_count * 1 + post.comments_count * 2;
-        return engagement + recencyFactor * 10;
-      };
-
-      const s = score(b) - score(a);
-      if (Math.abs(s) > 1e-9) return s;
-      const t = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      if (t !== 0) return t;
+      const timeDiff = new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      if (timeDiff !== 0) return timeDiff;
       return b.id.localeCompare(a.id);
     });
   }, [feed, feedMode]);
@@ -1088,8 +1068,11 @@ const Home = () => {
               post.feed_context ?? (isOwnPost ? "own" : isFollowingAuthor ? "following" : "suggested");
             const contextLabel = feedMode === "ranked" && effectiveContext === "suggested" ? "Sugerencia para ti" : null;
 
+            const hasMedia = Boolean(post.media_url && post.media_url.trim().length > 0);
+            const CardComponent = hasMedia || post.type === "photo" || post.type === "video" ? FeedPostCard : FeedTextPostCard;
+
             return (
-              <FeedPostCard
+              <CardComponent
                 key={post.id}
                 post={post}
                 currentUserId={user?.id}

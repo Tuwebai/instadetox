@@ -57,3 +57,8 @@ docs/profile-page.md
 docs/profile-tech-debt-plan.md
 docs/right-panel.md
 AGENTS.md
+audit-db.cjs
+client/src/components/messages/estilo-chat.md
+.gitignore
+docs/modal,responder.md
+docs/messages-page-parity.md

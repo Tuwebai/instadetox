@@ -258,12 +258,15 @@ const MessagesSidebar = ({
                         </div>
                         <div className="ig-dm-conversation-body">
                           <div className="ig-dm-conversation-title-row">
-                            <span className="ig-dm-conversation-title" title={conversation.title}>
+                            <span 
+                              className="ig-dm-conversation-title is-unread" 
+                              title={conversation.title}
+                            >
                               {conversation.title}
                             </span>
                           </div>
                           <div className="ig-dm-conversation-preview-row">
-                            <div className="ig-dm-conversation-preview-text">
+                            <div className="ig-dm-conversation-preview-text is-unread">
                               <span>{conversation.preview ?? "Envia un mensaje para iniciar la charla."}</span>
                               <div className="ig-dm-conversation-time-wrap">
                                 <span className="ig-dm-conversation-dot"> · </span>
@@ -275,9 +278,11 @@ const MessagesSidebar = ({
                           </div>
                         </div>
                       </div>
-                      <span className="ig-dm-unread-badge">
-                        {unreadByConversation[conversation.id] > 9 ? "9+" : unreadByConversation[conversation.id]}
-                      </span>
+                      {(unreadByConversation[conversation.id] ?? 0) > 0 ? (
+                        <span className="ig-dm-unread-dot-wrapper" data-visualcompletion="ignore">
+                          <div className="ig-dm-unread-dot" title="Unread" />
+                        </span>
+                      ) : null}
                     </button>
                   );
                 })}
@@ -312,12 +317,15 @@ const MessagesSidebar = ({
                     </div>
                     <div className="ig-dm-conversation-body">
                       <div className="ig-dm-conversation-title-row">
-                        <span className="ig-dm-conversation-title" title={conversation.title}>
+                        <span 
+                          className={`ig-dm-conversation-title${(unreadByConversation[conversation.id] ?? 0) > 0 ? " is-unread" : ""}`} 
+                          title={conversation.title}
+                        >
                           {conversation.title}
                         </span>
                       </div>
                       <div className="ig-dm-conversation-preview-row">
-                        <div className="ig-dm-conversation-preview-text">
+                        <div className={`ig-dm-conversation-preview-text${(unreadByConversation[conversation.id] ?? 0) > 0 ? " is-unread" : ""}`}>
                           <span>{conversation.preview ?? "Envia un mensaje para iniciar la charla."}</span>
                           <div className="ig-dm-conversation-time-wrap">
                             <span className="ig-dm-conversation-dot"> · </span>
@@ -329,6 +337,11 @@ const MessagesSidebar = ({
                       </div>
                     </div>
                   </div>
+                  {(unreadByConversation[conversation.id] ?? 0) > 0 ? (
+                    <span className="ig-dm-unread-dot-wrapper" data-visualcompletion="ignore">
+                      <div className="ig-dm-unread-dot" title="Unread" />
+                    </span>
+                  ) : null}
                 </button>
               );
             })}

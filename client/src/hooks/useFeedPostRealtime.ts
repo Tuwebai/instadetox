@@ -7,6 +7,7 @@ type FeedSetter = Dispatch<SetStateAction<FeedPostCardRow[]>>;
 
 interface UseFeedPostRealtimeParams {
   supabaseClient: SupabaseClient | null;
+  userId: string | null | undefined;
   setFeed: FeedSetter;
 }
 
@@ -27,12 +28,12 @@ const mergePostUpdate = (
   };
 };
 
-export const useFeedPostRealtime = ({ supabaseClient, setFeed }: UseFeedPostRealtimeParams) => {
+export const useFeedPostRealtime = ({ supabaseClient, userId, setFeed }: UseFeedPostRealtimeParams) => {
   useEffect(() => {
     if (!supabaseClient) return;
 
     const channel = supabaseClient
-      .channel("feed-posts-realtime")
+      .channel(`feed-posts-realtime-${Date.now()}`)
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "posts" },
@@ -51,10 +52,47 @@ export const useFeedPostRealtime = ({ supabaseClient, setFeed }: UseFeedPostReal
           setFeed((prev) => prev.filter((post) => post.id !== deletedId));
         },
       )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "post_likes" },
+        (payload) => {
+          const row = (payload.eventType === "DELETE" ? payload.old : payload.new) as Record<string, unknown>;
+          const postId = row.post_id as string | undefined;
+          const actorId = row.user_id as string | undefined;
+          if (!postId) return;
+          
+          // Ignoramos el evento si lo generó el propio usuario (ya cubierto por Optimistic UI)
+          if (actorId && userId && actorId === userId) return;
+
+          if (payload.eventType === "INSERT") {
+            setFeed((prev) => prev.map((post) => post.id === postId ? { ...post, likes_count: post.likes_count + 1 } : post));
+          } else if (payload.eventType === "DELETE") {
+            setFeed((prev) => prev.map((post) => post.id === postId ? { ...post, likes_count: Math.max(0, post.likes_count - 1) } : post));
+          }
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "post_comments" },
+        (payload) => {
+          const row = (payload.eventType === "DELETE" ? payload.old : payload.new) as Record<string, unknown>;
+          const postId = row.post_id as string | undefined;
+          const actorId = row.user_id as string | undefined;
+          if (!postId) return;
+          
+          if (actorId && userId && actorId === userId) return;
+
+          if (payload.eventType === "INSERT") {
+            setFeed((prev) => prev.map((post) => post.id === postId ? { ...post, comments_count: post.comments_count + 1 } : post));
+          } else if (payload.eventType === "DELETE") {
+            setFeed((prev) => prev.map((post) => post.id === postId ? { ...post, comments_count: Math.max(0, post.comments_count - 1) } : post));
+          }
+        }
+      )
       .subscribe();
 
     return () => {
       void supabaseClient.removeChannel(channel);
     };
-  }, [setFeed, supabaseClient]);
+  }, [setFeed, supabaseClient, userId]);
 };

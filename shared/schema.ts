@@ -1,6 +1,7 @@
 import {
   boolean,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   primaryKey,
@@ -168,14 +169,33 @@ export const messages = pgTable("messages", {
   senderId: uuid("sender_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
   body: text("body").notNull(),
   mediaUrl: text("media_url"),
+  /** jsonb: e.g. { replyTo: { id, body, senderId, username } } */
+  payload: jsonb("payload"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** Registra cuándo un participante vio por última vez una conversación. */
+export const conversationReads = pgTable(
+  "conversation_reads",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
+    seenAt: timestamp("seen_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.conversationId, table.userId] }),
+  }),
+);
 
 export const notifications = pgTable("notifications", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => profiles.id, { onDelete: "cascade" }),
   actorId: uuid("actor_id").references(() => profiles.id, { onDelete: "set null" }),
+  postId: uuid("post_id").references(() => posts.id, { onDelete: "cascade" }),
   type: notificationTypeEnum("type").notNull(),
   title: text("title").notNull(),
   body: text("body"),

@@ -129,9 +129,14 @@ const ProfilePostModal = ({
 }: ProfilePostModalProps) => {
   if (!modalPost) return null;
 
+  // Precalcular si el post tiene recursos multimedia para ajustar el layout
+  const modalMediaList = parseMediaList(modalPost.media_url);
+  const modalMedia = modalMediaList[0] ?? null;
+  const hasMedia = Boolean(modalMedia);
+
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm p-3 sm:p-6 flex items-center justify-center" onClick={onClose}>
-      <div className="relative w-full max-w-5xl h-[min(88vh,900px)] rounded-xl overflow-hidden border border-white/20 bg-slate-950/95" onClick={(e) => e.stopPropagation()}>
+      <div className={`relative w-full ${hasMedia ? "max-w-5xl" : "max-w-xl"} h-[min(88vh,900px)] rounded-xl overflow-hidden border border-white/20 bg-slate-950/95`} onClick={(e) => e.stopPropagation()}>
         <button
           type="button"
           onClick={onClose}
@@ -162,33 +167,21 @@ const ProfilePostModal = ({
           </>
         ) : null}
 
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_360px] h-full min-h-0">
-          <div className="bg-black min-h-[240px] md:min-h-0 md:h-full flex items-center justify-center">
-            {(() => {
-              const mediaList = parseMediaList(modalPost.media_url);
-              const media = mediaList[0] ?? null;
-              if (!media) {
-                return (
-                  <div className="p-5 text-sm text-gray-300">
-                    <MentionText text={modalPost.caption} />
-                  </div>
-                );
-              }
-              if (isVideoUrl(media)) {
-                return <video src={media} className="w-full h-full max-h-[80vh] object-contain" controls autoPlay playsInline />;
-              }
-              return <img src={media} alt={modalPost.title ?? "post"} className="w-full h-full max-h-[80vh] object-contain" />;
-            })()}
-          </div>
+        <div className={`grid ${hasMedia ? "grid-cols-1 md:grid-cols-[minmax(0,1fr)_360px]" : "grid-cols-1"} h-full min-h-0`}>
+          {hasMedia && (
+            <div className="bg-black min-h-[240px] md:min-h-0 md:h-full flex items-center justify-center">
+              {isVideoUrl(modalMedia) ? (
+                <video src={modalMedia} className="w-full h-full max-h-[80vh] object-contain" controls autoPlay playsInline />
+              ) : (
+                <img src={modalMedia} alt={modalPost.title ?? "post"} className="w-full h-full max-h-[80vh] object-contain" />
+              )}
+            </div>
+          )}
 
-          <div className="border-t md:border-t-0 md:border-l border-white/10 flex flex-col min-h-0 h-full">
+          <div className={`${hasMedia ? "border-t md:border-t-0 md:border-l" : ""} border-white/10 flex flex-col min-h-0 h-full`}>
             <div className="px-4 py-3 border-b border-white/10 flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full overflow-hidden bg-primary/20 flex items-center justify-center">
-                {profileData.avatar_url ? (
-                  <img src={profileData.avatar_url} alt={profileData.username} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-xs text-white">{profileData.username.slice(0, 1).toUpperCase()}</span>
-                )}
+              <div className="w-9 h-9 rounded-full overflow-hidden bg-white/10 flex items-center justify-center">
+                <img src={profileData.avatar_url || "/avatar_fallback.jpg"} alt={profileData.username} className="w-full h-full object-cover" />
               </div>
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-white truncate">{profileData.username}</p>
@@ -202,12 +195,8 @@ const ProfilePostModal = ({
               className="px-4 py-3 border-b border-white/10 overflow-y-auto scrollbar-invisible flex-1 min-h-0 max-h-[40vh] md:max-h-none space-y-3"
             >
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full overflow-hidden bg-primary/20 flex items-center justify-center flex-shrink-0">
-                  {profileData.avatar_url ? (
-                    <img src={profileData.avatar_url} alt={profileData.username} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-xs text-white">{profileData.username.slice(0, 1).toUpperCase()}</span>
-                  )}
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-white/10 flex items-center justify-center flex-shrink-0">
+                  <img src={profileData.avatar_url || "/avatar_fallback.jpg"} alt={profileData.username} className="w-full h-full object-cover" />
                 </div>
                 <div className="min-w-0 text-sm leading-5">
                   <span className="font-semibold text-white mr-1">{profileData.username}</span>
@@ -261,12 +250,8 @@ const ProfilePostModal = ({
                       return (
                         <div key={comment.id} className="space-y-1.5" style={{ paddingLeft: depth > 0 ? depth * 16 : 0 }}>
                           <div className="flex items-start gap-3">
-                            <div className="w-8 h-8 rounded-full overflow-hidden bg-primary/20 flex items-center justify-center flex-shrink-0">
-                              {comment.avatar_url ? (
-                                <img src={comment.avatar_url} alt={comment.username} className="w-full h-full object-cover" />
-                              ) : (
-                                <span className="text-xs text-white">{comment.username.slice(0, 1).toUpperCase()}</span>
-                              )}
+                            <div className="w-8 h-8 rounded-full overflow-hidden bg-white/10 flex items-center justify-center flex-shrink-0">
+                              <img src={comment.avatar_url || "/avatar_fallback.jpg"} alt={comment.username} className="w-full h-full object-cover" />
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="min-w-0 text-sm leading-5">

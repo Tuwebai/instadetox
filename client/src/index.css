@@ -2417,7 +2417,9 @@
   color: rgb(var(--ig-primary-text));
   padding: 8px 24px;
   cursor: pointer;
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   text-align: left;
   outline: none;
 }
@@ -2436,7 +2438,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
 }
 
 .ig-dm-conversation-avatar-box {
@@ -2522,19 +2525,35 @@
   text-decoration: none;
 }
 
-.ig-dm-unread-badge {
-  margin-left: auto;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #ef4444;
-  color: #fff;
-  font-size: 11px;
-  line-height: 20px;
-  font-weight: 700;
-  text-align: center;
+/* Estilos de conversación no leída — negrita y texto prominente */
+.ig-dm-conversation-title.is-unread {
+  font-weight: 600;
+  color: var(--primary-text);
 }
+
+.ig-dm-conversation-preview-text.is-unread span:first-child {
+  font-weight: 600;
+  color: var(--primary-text);
+}
+
+
+/* Indicador de mensajes no leídos — Punto azul Instagram pixel-perfect */
+.ig-dm-unread-dot-wrapper {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 12px;
+  flex-shrink: 0;
+}
+
+.ig-dm-unread-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #0095f6; /* Azul Instagram */
+  border-radius: 50%;
+}
+
 
 .ig-dm-request-chip {
   margin-left: auto;

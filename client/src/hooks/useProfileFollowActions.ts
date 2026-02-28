@@ -2,6 +2,7 @@ import { useCallback, useState } from "react";
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 import type { supabase as supabaseClient } from "@/lib/supabase";
 import { updateProfileRouteSnapshot } from "@/lib/profileRouteCache";
+import { apiFetch } from "@/lib/api";
 
 interface UseProfileFollowActionsParams {
   supabase: NonNullable<typeof supabaseClient> | null;
@@ -53,13 +54,14 @@ export const useProfileFollowActions = ({
         followers: Math.max(0, snapshot.followers - 1),
       }));
 
-      const { error } = await supabase
-        .from("follows")
-        .delete()
-        .eq("follower_id", userId)
-        .eq("following_id", profileDataId);
+      let hasError = false;
+      try {
+        await apiFetch(`/api/users/${profileDataId}/follow`, { method: "DELETE" });
+      } catch (err) {
+        hasError = true;
+      }
 
-      if (error) {
+      if (hasError) {
         setIsFollowing(true);
         setFollowers((prev) => prev + 1);
         updateProfileRouteSnapshot(profileUsername, (snapshot) => ({
@@ -78,14 +80,14 @@ export const useProfileFollowActions = ({
         isFollowPending: false,
       }));
 
-      const { error } = await supabase
-        .from("follow_requests")
-        .update({ status: "canceled", resolved_at: new Date().toISOString() })
-        .eq("requester_id", userId)
-        .eq("target_id", profileDataId)
-        .eq("status", "pending");
+      let hasError = false;
+      try {
+        await apiFetch(`/api/users/${profileDataId}/follow`, { method: "DELETE" });
+      } catch (err) {
+        hasError = true;
+      }
 
-      if (error) {
+      if (hasError) {
         setIsFollowPending(true);
         updateProfileRouteSnapshot(profileUsername, (snapshot) => ({
           ...snapshot,
@@ -103,17 +105,14 @@ export const useProfileFollowActions = ({
           isFollowPending: true,
         }));
 
-        const { error } = await supabase.from("follow_requests").upsert(
-          {
-            requester_id: userId,
-            target_id: profileDataId,
-            status: "pending",
-            resolved_at: null,
-          },
-          { onConflict: "requester_id,target_id" },
-        );
+        let hasError = false;
+        try {
+          await apiFetch(`/api/users/${profileDataId}/follow`, { method: "POST" });
+        } catch (err) {
+          hasError = true;
+        }
 
-        if (error) {
+        if (hasError) {
           setIsFollowPending(false);
           updateProfileRouteSnapshot(profileUsername, (snapshot) => ({
             ...snapshot,
@@ -132,12 +131,14 @@ export const useProfileFollowActions = ({
           followers: snapshot.followers + 1,
         }));
 
-        const { error } = await supabase.from("follows").insert({
-          follower_id: userId,
-          following_id: profileDataId,
-        });
+        let hasError = false;
+        try {
+          await apiFetch(`/api/users/${profileDataId}/follow`, { method: "POST" });
+        } catch (err) {
+          hasError = true;
+        }
 
-        if (error) {
+        if (hasError) {
           setIsFollowing(false);
           setFollowers((prev) => Math.max(0, prev - 1));
           updateProfileRouteSnapshot(profileUsername, (snapshot) => ({
