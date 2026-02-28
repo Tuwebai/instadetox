@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { Glass } from "@/components/ui/glass";
-import { Quote, Calendar, AlertCircle, Users, RefreshCw } from "lucide-react";
-import { QUOTES, UPCOMING_UPDATES } from "@/lib/utils";
+import { Quote, Calendar, Users, RefreshCw } from "lucide-react";
+import { QUOTES } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import BrandLogo from "@/components/BrandLogo";
+import DailyBook from "@/components/DailyBook";
 import { useDailyAppOpenCounter } from "@/hooks/useDailyAppOpenCounter";
 
 interface DetoxFriend {
@@ -18,8 +19,30 @@ interface DetoxFriend {
 const RightPanel = () => {
   const { user } = useAuth();
 
-  // State for quotes
-  const [quotes, setQuotes] = useState(QUOTES.slice(0, 3));
+  // Function to get deterministic random quotes for the day
+  const getDailyQuotes = () => {
+    const today = new Date().toDateString();
+    // Simple hash function for the date string as seed
+    let seed = Array.from(today).reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    
+    // Simple LCG (Linear Congruential Generator) for deterministic randomness
+    const random = () => {
+      seed = (seed * 1664525 + 1013904223) % 4294967296;
+      return seed / 4294967296;
+    };
+
+    const allIndexes = Array.from({ length: QUOTES.length }, (_, i) => i);
+    // Fisher-Yates shuffle with our seeded random
+    for (let i = allIndexes.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [allIndexes[i], allIndexes[j]] = [allIndexes[j], allIndexes[i]];
+    }
+    
+    return allIndexes.slice(0, 3).map(index => QUOTES[index]);
+  };
+
+  // State for quotes - initialized with daily deterministic quotes
+  const [quotes, setQuotes] = useState(getDailyQuotes);
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
   const [autoRotate, setAutoRotate] = useState(false);
 
@@ -112,28 +135,21 @@ const RightPanel = () => {
   }, [user?.id]);
 
   const rotateQuotes = () => {
-    // Get new random quote indexes that are not currently shown
+    // Get all available indexes
     const allIndexes = Array.from({ length: QUOTES.length }, (_, i) => i);
-    const currentIndexes = quotes.map((q) => QUOTES.findIndex((quote) => quote.text === q.text));
-    const availableIndexes = allIndexes.filter((i) => !currentIndexes.includes(i));
+    
+    // Shuffle and pick 3 unique random indexes
+    const shuffled = [...allIndexes].sort(() => 0.5 - Math.random());
+    const selectedIndexes = shuffled.slice(0, 3);
+    
+    const newQuotes = selectedIndexes.map(index => QUOTES[index]);
+    setQuotes(newQuotes);
 
-    // Replace one quote with a new one
-    setCurrentQuoteIndex((prev) => (prev + 1) % 3);
-
-    if (availableIndexes.length > 0) {
-      const randomIndex = Math.floor(Math.random() * availableIndexes.length);
-      const newQuoteIndex = availableIndexes[randomIndex];
-
-      const newQuotes = [...quotes];
-      newQuotes[currentQuoteIndex] = QUOTES[newQuoteIndex];
-      setQuotes(newQuotes);
-
-      toast({
-        title: "Nueva cita",
-        description: "Se ha actualizado una cita inspiradora",
-        duration: 2000,
-      });
-    }
+    toast({
+      title: "Citas actualizadas",
+      description: "Se han renovado las citas inspiradoras",
+      duration: 2000,
+    });
   };
 
   const toggleAutoRotate = () => {
@@ -159,7 +175,7 @@ const RightPanel = () => {
           <div className="text-5xl font-bold text-center bg-gradient-text transition-all duration-300 transform hover:scale-110">
             {detoxDays}
           </div>
-          <p className="text-gray-300 mt-2">dias sin Instadetox</p>
+          <p className="text-gray-300 mt-2">dias en Instadetox 🌿</p>
         </div>
       </Glass>
 
@@ -195,14 +211,7 @@ const RightPanel = () => {
               className="quote-card p-3 border border-gray-800 rounded-lg transition-all duration-300 hover:border-gray-700"
             >
               <div className="flex">
-                <div className="w-12 h-12 rounded overflow-hidden mr-3 flex-shrink-0">
-                  <img
-                    src={quote.image}
-                    alt={`Imagen relacionada a la cita de ${quote.author}`}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div>
+                <div className="flex-1">
                   <p className="text-gray-200 italic text-sm">"{quote.text}"</p>
                   <p className="text-right text-xs text-gray-400 mt-1">- {quote.author}</p>
                 </div>
@@ -212,21 +221,8 @@ const RightPanel = () => {
         </div>
       </Glass>
 
-      {/* Updates */}
-      <Glass className="p-6">
-        <h3 className="text-lg font-medium mb-3 flex items-center">
-          <AlertCircle className="w-5 h-5 mr-2 text-primary" />
-          Proximas actualizaciones
-        </h3>
-        <ul className="space-y-3">
-          {UPCOMING_UPDATES.map((update, index) => (
-            <li key={index} className="flex items-start">
-              <span className={`w-2 h-2 rounded-full bg-${update.status}-500 mt-2 mr-2 animate-pulse`}></span>
-              <span className="text-gray-300">{update.text}</span>
-            </li>
-          ))}
-        </ul>
-      </Glass>
+      {/* Daily Book Recommendation */}
+      <DailyBook />
 
       {/* Friend activity */}
       <Glass className="p-6">

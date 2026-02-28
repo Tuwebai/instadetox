@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Compass } from "lucide-react";
+import { Compass, ChevronDown, Plus } from "lucide-react";
 import { Glass } from "@/components/ui/glass";
 import { Skeleton } from "@/components/ui/skeleton";
 import DailyBook from "@/components/DailyBook";
@@ -65,6 +65,7 @@ const Home = () => {
   );
   const [followLoadingByUser, setFollowLoadingByUser] = useState<Record<string, boolean>>({});
   const [savedPostIds, setSavedPostIds] = useState<Set<string>>(() => new Set(homeFeedCache?.savedPostIds ?? []));
+  const [showFeedMenu, setShowFeedMenu] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const seenPostIdsRef = useRef<Set<string>>(new Set((homeFeedCache?.feed ?? []).map((post) => post.id)));
   const exhaustedCursorKeysRef = useRef<Set<string>>(new Set());
@@ -1023,28 +1024,66 @@ const Home = () => {
   return (
     <div className="w-full max-w-7xl mx-auto flex flex-col md:flex-row gap-6">
       <div className="w-full md:w-3/4 lg:w-8/12 space-y-6 pb-8 animate-in fade-in duration-500">
-        <Glass className="p-6">
-          <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <Compass className="w-5 h-5 mr-2 text-primary" />
-            Feed Detox
-          </h2>
-          <p className="text-gray-300 mb-4">Contenido social con enfoque de bienestar digital.</p>
-          <div className="flex gap-2">
-            <button
-              onClick={() => setFeedMode("ranked")}
-              className={`px-3 py-1.5 rounded-lg text-sm ${
-                feedMode === "ranked" ? "bg-primary/20 text-primary" : "frosted text-gray-300"
-              }`}
+        {/* Nuevo Header Detox Minimalista */}
+        <div className="flex flex-col items-center mb-4 pt-2">
+          <div className="relative group">
+            <button 
+              onClick={() => setShowFeedMenu(!showFeedMenu)}
+              className="flex items-center gap-2 px-4 py-2 hover:bg-white/5 rounded-lg transition-all"
             >
-              Para ti
+              <h1 className="text-xl font-bold text-white tracking-tight">
+                {feedMode === "ranked" ? "Para ti" : "Recientes"}
+              </h1>
+              <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showFeedMenu ? 'rotate-180' : ''}`} />
             </button>
-            <button
-              onClick={() => setFeedMode("recent")}
-              className={`px-3 py-1.5 rounded-lg text-sm ${
-                feedMode === "recent" ? "bg-primary/20 text-primary" : "frosted text-gray-300"
-              }`}
+
+            {showFeedMenu && (
+              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-1 w-40 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in zoom-in duration-200">
+                <button 
+                  onClick={() => { setFeedMode("ranked"); setShowFeedMenu(false); }}
+                  className={`w-full px-4 py-3 text-sm text-left hover:bg-white/5 transition-colors ${feedMode === "ranked" ? 'text-white font-bold' : 'text-gray-400'}`}
+                >
+                  Para ti
+                </button>
+                <button 
+                  onClick={() => { setFeedMode("recent"); setShowFeedMenu(false); }}
+                  className={`w-full px-4 py-3 text-sm text-left hover:bg-white/5 transition-colors ${feedMode === "recent" ? 'text-white font-bold' : 'text-gray-400'}`}
+                >
+                  Recientes
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Barra de Creación Rápida */}
+        <Glass className="p-4 mb-6">
+          <div className="flex items-center gap-4">
+            <div 
+              className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={() => setLocation(`/${user?.username || 'perfil'}`)}
             >
-              Recientes
+              {user?.avatar_url ? (
+                <img src={user.avatar_url} alt="Mi perfil" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-primary/20 flex items-center justify-center text-white font-bold">
+                  {user?.username?.[0]?.toUpperCase() || 'U'}
+                </div>
+              )}
+            </div>
+            
+            <div 
+              onClick={() => setLocation("/crear")}
+              className="flex-1 text-gray-500 text-sm cursor-text hover:text-gray-400 transition-colors py-2"
+            >
+              ¿Qué novedades tienes?
+            </div>
+
+            <button
+              onClick={() => setLocation("/crear")}
+              className="px-5 py-2 bg-white/10 hover:bg-white/20 text-white text-sm font-bold rounded-xl border border-white/5 transition-all active:scale-95"
+            >
+              Publicar
             </button>
           </div>
         </Glass>
@@ -1118,11 +1157,9 @@ const Home = () => {
         ) : null}
 
         {loadingMore ? renderFeedSkeleton("sk-more") : null}
-
-        <DailyBook />
       </div>
 
-      <div className="w-full md:w-1/4 lg:w-4/12">
+      <div className="hidden md:block md:w-1/4 lg:w-4/12">
         <RightPanel />
         <Footer className="mt-6" />
       </div>

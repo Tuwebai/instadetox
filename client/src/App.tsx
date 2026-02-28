@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Background } from "@/components/ui/background";
 import Sidebar from "@/components/Sidebar";
 import MobileNav from "@/components/MobileNav";
+import MobileBottomNav from "@/components/MobileBottomNav";
 import Home from "@/pages/Home";
 import Search from "@/pages/Search";
 import Messages from "@/pages/Messages";
@@ -14,6 +15,7 @@ import More from "@/pages/More";
 import Privacy from "@/pages/Privacy";
 import EditProfile from "@/pages/EditProfile";
 import Login from "@/pages/Login";
+import MobileStatsPage from "@/pages/MobileStatsPage";
 import NotFound from "@/pages/not-found";
 import { useState } from "react";
 import { AuthProvider, useAuth } from "@/lib/AuthContext";
@@ -51,6 +53,7 @@ function AppRoutes() {
       <Route path="/accounts/edit/" component={EditProfile} />
       <Route path="/accounts/edit" component={EditProfile} />
       <Route path="/login" component={Home} />
+      <Route path="/detox" component={MobileStatsPage} />
       <Route path="/:username" component={Profile} />
       <Route component={NotFound} />
     </Switch>
@@ -70,11 +73,7 @@ function AppShell() {
         <div className="flex flex-1 overflow-hidden">
           {!isStandaloneRoute ? <Sidebar /> : null}
           {!isStandaloneRoute && !isMessagesRoute ? (
-            <MobileNav
-              isOpen={mobileMenuOpen}
-              onOpen={() => setMobileMenuOpen(true)}
-              onClose={() => setMobileMenuOpen(false)}
-            />
+            <MobileNav />
           ) : null}
 
           <main
@@ -89,6 +88,7 @@ function AppShell() {
             <AppRoutes />
           </main>
         </div>
+        {!isStandaloneRoute ? <MobileBottomNav /> : null}
       </div>
       <Toaster />
     </>
