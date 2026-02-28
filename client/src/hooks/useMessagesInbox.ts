@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
+import { useLocation } from "wouter";
 
 interface ConversationRow {
   id: string;
@@ -29,6 +30,7 @@ export interface InboxConversation {
   preview: string | null;
   previewAt: string | null;
   avatarUrl: string | null;
+  username?: string | null;
 }
 
 export interface InboxMessage {
@@ -55,7 +57,38 @@ const PAGE_SIZE = 50;
 
 export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   const [conversations, setConversations] = useState<InboxConversation[]>([]);
-  const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [location, setLocation] = useLocation();
+
+  const urlConversationId = useMemo(() => {
+    if (location.startsWith("/direct/t/")) {
+      const parts = location.split("/");
+      return parts[parts.length - 1];
+    }
+    return null;
+  }, [location]);
+
+  const [selectedConversationId, setLocalSelectedConversationId] = useState<string | null>(urlConversationId);
+
+  // Sync state con URL al navegar directamente
+  useEffect(() => {
+    if (urlConversationId && urlConversationId !== selectedConversationId) {
+      selectedConversationIdRef.current = urlConversationId;
+      setLocalSelectedConversationId(urlConversationId);
+    } else if (!urlConversationId && selectedConversationId) {
+       selectedConversationIdRef.current = null;
+       setLocalSelectedConversationId(null);
+    }
+  }, [urlConversationId]);
+
+  const setSelectedConversationId = useCallback((id: string | null) => {
+    selectedConversationIdRef.current = id;
+    if (id) {
+      setLocation(`/direct/t/${id}`);
+    } else {
+      setLocation("/direct/inbox");
+    }
+    setLocalSelectedConversationId(id);
+  }, [setLocation]);
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -73,6 +106,8 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   const typingChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastTypingSentAtRef = useRef(0);
+  // Ref para selectedConversationId — evita stale closures en handlers de realtime
+  const selectedConversationIdRef = useRef<string | null>(null);
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
   const mergeMessagesById = (items: InboxMessage[]) => {
     const map = new Map<string, InboxMessage>();
@@ -221,6 +256,9 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
 
       if (conversationIds.length === 0) {
         setConversations([]);
+        if (selectedConversationId) {
+          setLocation("/direct/inbox");
+        }
         setSelectedConversationId(null);
         setMessages([]);
         return;
@@ -349,6 +387,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
           preview: latest?.body ?? null,
           previewAt: latest?.created_at ?? null,
           avatarUrl: directCounterpart?.avatar_url ?? null,
+          username: directCounterpart?.username ?? null,
         };
       });
 
@@ -371,10 +410,13 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       setConversations(nextConversations);
       setOtherParticipantCountByConversation(nextOtherParticipantCountByConversation);
       setRequestConversationIds(nextRequestConversationIds);
-      setSelectedConversationId((prev) => {
-        if (!prev) return nextConversations[0]?.id ?? null;
-        return nextConversations.some((row) => row.id === prev) ? prev : nextConversations[0]?.id ?? null;
-      });
+      if (!urlConversationId && nextConversations.length > 0) {
+        const id = nextConversations[0]?.id;
+        if (id) {
+           setSelectedConversationId(null); // Deja la URI en /direct/inbox explicitamente.
+        }
+      }
+      
       void loadUnreadCounts(nextConversations.map((row) => row.id));
     } finally {
       setLoadingConversations(false);
@@ -654,11 +696,11 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       ];
       moveConversationToTopWithPreview(selectedConversationId, trimmed, optimisticCreatedAt);
 
-      const { error } = await supabase.from("messages").insert({
+      const { data, error } = await supabase.from("messages").insert({
         conversation_id: selectedConversationId,
         sender_id: userId,
         body: trimmed,
-      });
+      }).select("id, created_at").single();
 
       if (error) {
         const failedMessage: InboxMessage = { ...optimisticMessage, deliveryState: "failed" };
@@ -672,22 +714,68 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
           ...(failedMessagesRef.current[selectedConversationId] ?? []).filter((message) => message.id !== optimisticId),
           failedMessage,
         ];
-        void loadConversations({ silent: true });
         return false;
       }
 
+      const backendId = data.id;
+      const backendCreatedAt = data.created_at;
+
+      setMessages((prev) =>
+        prev.map((message) =>
+          message.id === optimisticId
+            ? { ...message, id: backendId, createdAt: backendCreatedAt, deliveryState: "sent" }
+            : message
+        )
+      );
+
+      messagesCacheRef.current[selectedConversationId] = (messagesCacheRef.current[selectedConversationId] ?? []).map((message) =>
+        message.id === optimisticId
+          ? { ...message, id: backendId, createdAt: backendCreatedAt, deliveryState: "sent" }
+          : message
+      );
+
       await supabase
         .from("conversations")
-        .update({ updated_at: new Date().toISOString() })
+        .update({ updated_at: backendCreatedAt })
         .eq("id", selectedConversationId);
 
       failedMessagesRef.current[selectedConversationId] = (failedMessagesRef.current[selectedConversationId] ?? []).filter(
         (message) => message.id !== optimisticId,
       );
-      await Promise.all([loadMessages(selectedConversationId, { silent: true }), loadConversations({ silent: true })]);
+
+      // === BROADCAST ENTERPRISE: patrón Instagram/MQTT ===
+      // Consultar participantes de la conversación y emitir broadcast
+      // a inbox:userId de cada uno (excluyendo al remitente)
+      // Este canal es permanente en cada cliente, no depende de qué conv está abierta
+      const realMessage: InboxMessage = {
+        id: backendId,
+        conversationId: selectedConversationId,
+        senderId: userId,
+        body: trimmed,
+        createdAt: backendCreatedAt,
+        deliveryState: "sent",
+      };
+      void (async () => {
+        const sc = supabase;
+        if (!sc) return;
+        const { data: parts } = await sc
+          .from("conversation_participants")
+          .select("user_id")
+          .eq("conversation_id", selectedConversationId);
+        const recipientIds = (parts ?? []).map((p: { user_id: string }) => p.user_id).filter((id) => id !== userId);
+        await Promise.all(
+          recipientIds.map((recipientId) => {
+            const ch = sc.channel(`inbox:${recipientId}`);
+            return ch
+              .send({ type: "broadcast", event: "new_message", payload: realMessage })
+              .finally(() => sc.removeChannel(ch));
+          })
+        );
+      })();
+
       return true;
     },
-    [loadConversations, loadMessages, moveConversationToTopWithPreview, selectedConversationId, userId],
+    [moveConversationToTopWithPreview, selectedConversationId, userId],
   );
 
   const retryFailedMessage = useCallback(
@@ -765,6 +853,37 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       }, 2400);
     });
 
+    // Listener de mensajes nuevos via Broadcast (patrón Instagram/MQTT)
+    // Evita que RLS en postgres_changes bloquee la entrega entre usuarios
+    channel.on("broadcast", { event: "new_message" }, ({ payload }) => {
+      const msg = payload as InboxMessage | null;
+      if (!msg || !msg.id || !msg.conversationId) return;
+      // Ignorar si es nuestro propio mensaje (ya en el estado via optimistic)
+      if (msg.senderId === userId) return;
+
+      // Actualizar el preview del sidebar
+      moveConversationToTopWithPreview(msg.conversationId, msg.body, msg.createdAt);
+
+      // Si la conversación está abierta, agregar el mensaje al hilo
+      if (selectedConversationIdRef.current === msg.conversationId) {
+        void markConversationSeen(msg.conversationId);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          const next = [...prev, msg].sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+          messagesCacheRef.current[msg.conversationId] = next;
+          return next;
+        });
+      } else {
+        // En otra conversación: actualizar badge de no leídos
+        setUnreadByConversation((prev) => ({
+          ...prev,
+          [msg.conversationId]: (prev[msg.conversationId] ?? 0) + 1,
+        }));
+      }
+    });
+
     channel.subscribe();
     return () => {
       if (typingTimeoutRef.current) {
@@ -798,20 +917,63 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     if (!supabase || !userId) return;
 
     const client = supabase;
-    const channel = client.channel(`messages-inbox:${userId}:${Date.now()}`);
+    // Canal estable por userId — persistente durante toda la sesión del usuario
+    // Recibe mensajes de CUALQUIER conversación, sin depender de cuál esté abierta
+    const channel = client.channel(`inbox:${userId}`);
 
+    // --- Broadcast: recepción de mensajes nuevos (patrón Instagram/MQTT) ---
+    // El sender emite a inbox:${recipientId} después del INSERT exitoso
+    channel.on("broadcast", { event: "new_message" }, ({ payload }) => {
+      const msg = payload as InboxMessage | null;
+      if (!msg || !msg.id || !msg.conversationId) return;
+
+      // Actualizar preview del sidebar SIEMPRE
+      moveConversationToTopWithPreview(msg.conversationId, msg.body, msg.createdAt);
+
+      const currentConversationId = selectedConversationIdRef.current;
+      if (currentConversationId === msg.conversationId) {
+        // Conversación abierta: insertar en hilo y marcar como leído
+        void markConversationSeen(msg.conversationId);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          const next = [...prev, msg].sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+          messagesCacheRef.current[msg.conversationId] = next;
+          return next;
+        });
+      } else {
+        // Otra conversación: incrementar badge de no leídos
+        setUnreadByConversation((prev) => ({
+          ...prev,
+          [msg.conversationId]: (prev[msg.conversationId] ?? 0) + 1,
+        }));
+      }
+    });
+
+    // --- postgres_changes: fallback para sincronización del sidebar ---
+    // (cambios en participantes, actualizaciones de conversación, visto)
     const handleMessageEvent = (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
       const row = payload.eventType === "DELETE" ? payload.old : payload.new;
       const rawConversationId = row?.conversation_id;
       if (typeof rawConversationId !== "string") return;
       const rawSenderId = row?.sender_id;
+      const currentConversationId = selectedConversationIdRef.current;
 
-      void loadConversations({ silent: true });
-      if (selectedConversationId === rawConversationId) {
-        void loadMessages(rawConversationId, { silent: true });
-        void markConversationSeen(rawConversationId);
-      } else if (typeof rawSenderId === "string" && rawSenderId !== userId && payload.eventType !== "DELETE") {
-        void loadUnreadCounts(conversations.map((conversation) => conversation.id));
+      // Solo manejar si el mensaje es del propio usuario (propio = no recibiremos broadcast de nosotros mismos)
+      // Para mensajes de otros, el broadcast são encarga
+      if (payload.eventType === "INSERT" && typeof rawSenderId === "string" && rawSenderId === userId) {
+        // Propio mensaje: solo mover al top (el estado optimista ya lo tiene)
+        moveConversationToTopWithPreview(
+          rawConversationId,
+          (row.body as string) ?? "",
+          (row.created_at as string) ?? new Date().toISOString()
+        );
+      } else if (payload.eventType !== "INSERT") {
+        void loadConversations({ silent: true });
+        if (currentConversationId === rawConversationId) {
+          void loadMessages(rawConversationId, { silent: true });
+        }
       }
     };
 
@@ -819,16 +981,12 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     channel.on(
       "postgres_changes",
       { event: "*", schema: "public", table: "conversation_participants", filter: `user_id=eq.${userId}` },
-      () => {
-        void loadConversations({ silent: true });
-      },
+      () => { void loadConversations({ silent: true }); },
     );
     channel.on(
       "postgres_changes",
       { event: "*", schema: "public", table: "conversations" },
-      () => {
-        void loadConversations({ silent: true });
-      },
+      () => { void loadConversations({ silent: true }); },
     );
     channel.on(
       "postgres_changes",
@@ -837,7 +995,8 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         const row = payload.eventType === "DELETE" ? payload.old : payload.new;
         const rawConversationId = row?.conversation_id;
         if (typeof rawConversationId !== "string") return;
-        if (selectedConversationId === rawConversationId) {
+        const currentConversationId = selectedConversationIdRef.current;
+        if (currentConversationId === rawConversationId) {
           void loadPeerSeenAt(rawConversationId);
           const selectedMessages = messagesCacheRef.current[rawConversationId] ?? [];
           const latestOwnSentAt =
@@ -853,7 +1012,9 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     return () => {
       void client.removeChannel(channel);
     };
-  }, [conversations, loadConversations, loadMessages, loadPeerSeenAt, loadSeenByCount, loadUnreadCounts, markConversationSeen, selectedConversationId, userId]);
+  // selectedConversationId NO va en las deps — se lee via ref para evitar recrear el canal
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations, loadConversations, loadMessages, loadPeerSeenAt, loadSeenByCount, loadUnreadCounts, markConversationSeen, moveConversationToTopWithPreview, userId]);
 
   useEffect(() => {
     const onResume = () => {

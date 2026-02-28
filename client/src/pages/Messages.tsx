@@ -20,6 +20,7 @@ const Messages = () => {
     setSelectedConversationId,
     selectedConversation,
     messages,
+    loadingConversations,
     loadingMessages,
     peerTyping,
     unreadByConversation,
@@ -56,6 +57,7 @@ const Messages = () => {
               onTabChange={setInboxTab}
               onSelectConversation={setSelectedConversationId}
               onCreateMessage={() => setNewChatOpen(true)}
+              loadingConversations={loadingConversations}
             />
           </div>
 
@@ -95,7 +97,7 @@ const Messages = () => {
                   void loadOlderMessages();
                 }}
               />
-            ) : (
+            ) : loadingConversations ? null : (
               <MessagesEmptyState onStartMessage={() => setNewChatOpen(true)} />
             )}
           </div>

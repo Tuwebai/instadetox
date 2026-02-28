@@ -1,4 +1,4 @@
-﻿import { type InboxConversation } from "@/hooks/useMessagesInbox";
+import { type InboxConversation } from "@/hooks/useMessagesInbox";
 
 interface MessagesSidebarProps {
   username: string;
@@ -12,10 +12,11 @@ interface MessagesSidebarProps {
   onTabChange: (tab: "primary" | "general" | "requests") => void;
   onSelectConversation: (conversationId: string) => void;
   onCreateMessage: () => void;
+  loadingConversations: boolean;
 }
 
-const seedAvatarUrl = (seed: string, size: number) =>
-  `https://api.dicebear.com/9.x/thumbs/png?seed=${encodeURIComponent(seed)}&size=${size}`;
+/** Fallback tipo Instagram cuando no hay avatar de conversación. */
+const AVATAR_FALLBACK_URL = "/avatar_fallback.jpg";
 
 const formatRelativeTime = (isoDate: string) => {
   const now = Date.now();
@@ -42,15 +43,19 @@ const MessagesSidebar = ({
   onTabChange,
   onSelectConversation,
   onCreateMessage,
+  loadingConversations,
 }: MessagesSidebarProps) => {
   const requestSet = new Set(requestConversationIds);
 
   const filteredConversations = conversations.filter((conversation) => {
+    // Regla Instadetox/Instagram: no renderizar el chat en la lista hasta no enviar primer mensaje
+    if (!conversation.preview) return false;
+
     const term = searchValue.trim().toLowerCase();
     if (!term) return true;
     return (
       conversation.title.toLowerCase().includes(term) ||
-      (conversation.preview ?? "").toLowerCase().includes(term)
+      conversation.preview.toLowerCase().includes(term)
     );
   });
 
@@ -158,25 +163,7 @@ const MessagesSidebar = ({
         </label>
       </div>
 
-      {quickItems.length > 0 ? (
-        <div className="ig-dm-story-strip" aria-label="Accesos rapidos">
-          {quickItems.map((conversation) => (
-            <button
-              key={`quick-${conversation.id}`}
-              className="ig-dm-story-chip"
-              type="button"
-              onClick={() => onSelectConversation(conversation.id)}
-            >
-              <img src={seedAvatarUrl(conversation.id, 60)} alt="" width={56} height={56} />
-              <span>{conversation.title}</span>
-            </button>
-          ))}
-        </div>
-      ) : null}
-
-      <div className="ig-dm-sidebar-list-head">
-        <h1>Mensajes</h1>
-      </div>
+      {/* "Quick Items/Stories" removal requested by user */}
 
       <div className="ig-dm-inbox-tabs" role="tablist" aria-label="Categorias de inbox">
         <button
@@ -214,17 +201,14 @@ const MessagesSidebar = ({
       </div>
 
       <div className="ig-dm-conversations">
-        {activeTab === "requests" && requestConversations.length === 0 ? (
-          <p className="ig-dm-empty-list">No hay solicitudes de mensajes.</p>
-        ) : null}
-        {activeTab === "general" && generalConversations.length === 0 ? (
-          <p className="ig-dm-empty-list">No hay conversaciones en general.</p>
-        ) : null}
-        {activeTab === "primary" && filteredConversations.length === 0 ? (
-          <p className="ig-dm-empty-list">No hay conversaciones.</p>
-        ) : null}
-        {activeTab === "requests" ? (
-          requestConversations.map((conversation) => {
+            {activeTab === "requests" && requestConversations.length === 0 ? (
+              <p className="ig-dm-empty-list">No hay solicitudes de mensajes.</p>
+            ) : null}
+            {activeTab === "general" && generalConversations.length === 0 ? (
+              <p className="ig-dm-empty-list">No hay conversaciones en general.</p>
+            ) : null}
+            {activeTab === "requests" ? (
+              requestConversations.map((conversation) => {
             const selected = selectedConversationId === conversation.id;
             return (
               <button
@@ -233,28 +217,44 @@ const MessagesSidebar = ({
                 className={`ig-dm-conversation-item${selected ? " is-active" : ""}`}
                 onClick={() => onSelectConversation(conversation.id)}
               >
-                <img
-                  src={seedAvatarUrl(conversation.id, 64)}
-                  alt=""
-                  width={56}
-                  height={56}
-                  className="ig-dm-avatar"
-                />
-                <div className="ig-dm-conversation-body">
-                  <p className="ig-dm-conversation-title">{conversation.title}</p>
-                  <p className="ig-dm-conversation-preview">
-                    <span>{conversation.preview ?? "Solicitud de mensaje."}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>{formatRelativeTime(conversation.previewAt ?? conversation.updatedAt)}</span>
-                  </p>
+                <div className="ig-dm-conversation-inner-wrap">
+                  <div className="ig-dm-conversation-avatar-box">
+                    <span className="ig-dm-conversation-avatar-span">
+                      <img
+                        src={conversation.avatarUrl ?? AVATAR_FALLBACK_URL}
+                        alt=""
+                        width={56}
+                        height={56}
+                        className="ig-dm-avatar"
+                        referrerPolicy="origin-when-cross-origin"
+                      />
+                    </span>
+                  </div>
+                  <div className="ig-dm-conversation-body">
+                    <div className="ig-dm-conversation-title-row">
+                      <span className="ig-dm-conversation-title" title={conversation.title}>
+                        {conversation.title}
+                      </span>
+                    </div>
+                    <div className="ig-dm-conversation-preview-row">
+                      <div className="ig-dm-conversation-preview-text">
+                        <span>{conversation.preview ?? "Solicitud de mensaje."}</span>
+                        <div className="ig-dm-conversation-time-wrap">
+                          <span className="ig-dm-conversation-dot"> · </span>
+                          <span className="ig-dm-conversation-time">
+                            <abbr>{formatRelativeTime(conversation.previewAt ?? conversation.updatedAt)}</abbr>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <span className="ig-dm-request-chip">Nueva</span>
               </button>
             );
           })
-        ) : null}
-        {activeTab === "general" ? (
-          generalConversations.map((conversation) => {
+            ) : null}
+            {activeTab === "general" ? (
+              generalConversations.map((conversation) => {
             const selected = selectedConversationId === conversation.id;
             return (
               <button
@@ -263,26 +263,43 @@ const MessagesSidebar = ({
                 className={`ig-dm-conversation-item${selected ? " is-active" : ""}`}
                 onClick={() => onSelectConversation(conversation.id)}
               >
-                <img
-                  src={seedAvatarUrl(conversation.id, 64)}
-                  alt=""
-                  width={56}
-                  height={56}
-                  className="ig-dm-avatar"
-                />
-                <div className="ig-dm-conversation-body">
-                  <p className="ig-dm-conversation-title">{conversation.title}</p>
-                  <p className="ig-dm-conversation-preview">
-                    <span>{conversation.preview ?? "Envia un mensaje para iniciar la charla."}</span>
-                    <span aria-hidden="true">·</span>
-                    <span>{formatRelativeTime(conversation.previewAt ?? conversation.updatedAt)}</span>
-                  </p>
+                <div className="ig-dm-conversation-inner-wrap">
+                  <div className="ig-dm-conversation-avatar-box">
+                    <span className="ig-dm-conversation-avatar-span">
+                      <img
+                        src={conversation.avatarUrl ?? AVATAR_FALLBACK_URL}
+                        alt=""
+                        width={56}
+                        height={56}
+                        className="ig-dm-avatar"
+                        referrerPolicy="origin-when-cross-origin"
+                      />
+                    </span>
+                  </div>
+                  <div className="ig-dm-conversation-body">
+                    <div className="ig-dm-conversation-title-row">
+                      <span className="ig-dm-conversation-title" title={conversation.title}>
+                        {conversation.title}
+                      </span>
+                    </div>
+                    <div className="ig-dm-conversation-preview-row">
+                      <div className="ig-dm-conversation-preview-text">
+                        <span>{conversation.preview ?? "Envia un mensaje para iniciar la charla."}</span>
+                        <div className="ig-dm-conversation-time-wrap">
+                          <span className="ig-dm-conversation-dot"> · </span>
+                          <span className="ig-dm-conversation-time">
+                            <abbr>{formatRelativeTime(conversation.previewAt ?? conversation.updatedAt)}</abbr>
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </button>
             );
           })
-        ) : null}
-        {activeTab === "primary" ? (
+            ) : null}
+            {activeTab === "primary" ? (
           <>
             {unreadConversations.length > 0 ? (
               <section className="ig-dm-section">
@@ -296,20 +313,37 @@ const MessagesSidebar = ({
                       className={`ig-dm-conversation-item${selected ? " is-active" : ""}`}
                       onClick={() => onSelectConversation(conversation.id)}
                     >
-                      <img
-                        src={seedAvatarUrl(conversation.id, 64)}
-                        alt=""
-                        width={56}
-                        height={56}
-                        className="ig-dm-avatar"
-                      />
-                      <div className="ig-dm-conversation-body">
-                        <p className="ig-dm-conversation-title">{conversation.title}</p>
-                        <p className="ig-dm-conversation-preview">
-                          <span>{conversation.preview ?? "Envia un mensaje para iniciar la charla."}</span>
-                          <span aria-hidden="true">·</span>
-                          <span>{formatRelativeTime(conversation.previewAt ?? conversation.updatedAt)}</span>
-                        </p>
+                      <div className="ig-dm-conversation-inner-wrap">
+                        <div className="ig-dm-conversation-avatar-box">
+                          <span className="ig-dm-conversation-avatar-span">
+                            <img
+                              src={conversation.avatarUrl ?? AVATAR_FALLBACK_URL}
+                              alt=""
+                              width={56}
+                              height={56}
+                              className="ig-dm-avatar"
+                              referrerPolicy="origin-when-cross-origin"
+                            />
+                          </span>
+                        </div>
+                        <div className="ig-dm-conversation-body">
+                          <div className="ig-dm-conversation-title-row">
+                            <span className="ig-dm-conversation-title" title={conversation.title}>
+                              {conversation.title}
+                            </span>
+                          </div>
+                          <div className="ig-dm-conversation-preview-row">
+                            <div className="ig-dm-conversation-preview-text">
+                              <span>{conversation.preview ?? "Envia un mensaje para iniciar la charla."}</span>
+                              <div className="ig-dm-conversation-time-wrap">
+                                <span className="ig-dm-conversation-dot"> · </span>
+                                <span className="ig-dm-conversation-time">
+                                  <abbr>{formatRelativeTime(conversation.previewAt ?? conversation.updatedAt)}</abbr>
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </div>
                       <span className="ig-dm-unread-badge">
                         {unreadByConversation[conversation.id] > 9 ? "9+" : unreadByConversation[conversation.id]}
@@ -333,20 +367,37 @@ const MessagesSidebar = ({
                   className={`ig-dm-conversation-item${selected ? " is-active" : ""}`}
                   onClick={() => onSelectConversation(conversation.id)}
                 >
-                  <img
-                    src={seedAvatarUrl(conversation.id, 64)}
-                    alt=""
-                    width={56}
-                    height={56}
-                    className="ig-dm-avatar"
-                  />
-                  <div className="ig-dm-conversation-body">
-                    <p className="ig-dm-conversation-title">{conversation.title}</p>
-                    <p className="ig-dm-conversation-preview">
-                      <span>{conversation.preview ?? "Envia un mensaje para iniciar la charla."}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{formatRelativeTime(conversation.previewAt ?? conversation.updatedAt)}</span>
-                    </p>
+                  <div className="ig-dm-conversation-inner-wrap">
+                    <div className="ig-dm-conversation-avatar-box">
+                      <span className="ig-dm-conversation-avatar-span">
+                        <img
+                          src={conversation.avatarUrl ?? AVATAR_FALLBACK_URL}
+                          alt=""
+                          width={56}
+                          height={56}
+                          className="ig-dm-avatar"
+                          referrerPolicy="origin-when-cross-origin"
+                        />
+                      </span>
+                    </div>
+                    <div className="ig-dm-conversation-body">
+                      <div className="ig-dm-conversation-title-row">
+                        <span className="ig-dm-conversation-title" title={conversation.title}>
+                          {conversation.title}
+                        </span>
+                      </div>
+                      <div className="ig-dm-conversation-preview-row">
+                        <div className="ig-dm-conversation-preview-text">
+                          <span>{conversation.preview ?? "Envia un mensaje para iniciar la charla."}</span>
+                          <div className="ig-dm-conversation-time-wrap">
+                            <span className="ig-dm-conversation-dot"> · </span>
+                            <span className="ig-dm-conversation-time">
+                              <abbr>{formatRelativeTime(conversation.previewAt ?? conversation.updatedAt)}</abbr>
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </button>
               );
@@ -359,5 +410,3 @@ const MessagesSidebar = ({
 };
 
 export default MessagesSidebar;
-
-

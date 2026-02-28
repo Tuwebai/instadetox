@@ -40,7 +40,8 @@ function AppRoutes() {
       <Route path="/inicio" component={Home} />
       <Route path="/p/:postId" component={Profile} />
       <Route path="/busqueda" component={Search} />
-      <Route path="/mensajes" component={Messages} />
+      <Route path="/direct/inbox" component={Messages} />
+      <Route path="/direct/t/:id" component={Messages} />
       <Route path="/notificaciones" component={Notifications} />
       <Route path="/notificaciones/solicitudes" component={FollowerRequests} />
       <Route path="/crear" component={Create} />
@@ -59,7 +60,7 @@ function AppShell() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [location] = useLocation();
   const isStandaloneRoute = location === "/privacidad";
-  const isMessagesRoute = location === "/mensajes";
+  const isMessagesRoute = location.startsWith("/direct/inbox") || location.startsWith("/direct/t/");
 
   return (
     <>
@@ -67,7 +68,7 @@ function AppShell() {
       <div className="flex flex-col min-h-screen">
         <div className="flex flex-1 overflow-hidden">
           {!isStandaloneRoute ? <Sidebar /> : null}
-          {!isStandaloneRoute ? (
+          {!isStandaloneRoute && !isMessagesRoute ? (
             <MobileNav
               isOpen={mobileMenuOpen}
               onOpen={() => setMobileMenuOpen(true)}
@@ -78,9 +79,9 @@ function AppShell() {
           <main
             className={`flex-1 h-full ${
               isStandaloneRoute
-                ? "px-3 sm:px-4 md:px-5 lg:px-8 py-4 sm:py-6 pt-4 md:pt-4 md:ml-0"
+                ? "px-3 sm:px-4 md:px-5 lg:px-8 py-4 sm:py-6 pt-4 md:ml-0"
                 : isMessagesRoute
-                  ? "px-0 py-0 md:ml-[78px] pt-16 md:pt-0"
+                  ? "px-0 py-0 md:ml-[78px]"
                   : "px-3 sm:px-4 md:px-5 lg:px-8 py-4 sm:py-6 md:ml-[78px] pt-16 md:pt-0"
             }`}
           >

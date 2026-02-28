@@ -40,7 +40,7 @@ export function getRandomQuote() {
 export const NAVIGATION_ITEMS = [
   { name: "Inicio", icon: "home", path: "/inicio" },
   { name: "Búsqueda", icon: "search", path: "/busqueda" },
-  { name: "Mensajes", icon: "message-circle", path: "/mensajes" },
+  { name: "Mensajes", icon: "message-circle", path: "/direct/inbox" },
   { name: "Notificaciones", icon: "bell", path: "/notificaciones" },
   { name: "Crear", icon: "plus-circle", path: "/crear" },
   { name: "Perfil", icon: "user", path: "/perfil" },
