@@ -50,12 +50,17 @@
 }
 
 @layer base {
+  html {
+    background-color: #020617; /* Slate 950 constant */
+  }
+
   * {
     @apply border-border;
   }
 
   body {
-    @apply font-sans antialiased bg-background text-foreground;
+    @apply font-sans antialiased text-foreground;
+    background-color: #020617; /* Forzar fondo oscuro antes de React */
     min-height: 100vh;
     font-family: "Manrope", sans-serif;
   }
@@ -2665,15 +2670,128 @@
   opacity: 0.9;
 }
 
-.ig-dm-seen-status {
-  display: block;
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.45);
-  margin-top: 4px;
-  text-align: right;
-  width: 100%;
+/* --- INTERACCIONES DE MENSAJE (HOVER & MENU) --- */
+.ig-dm-bubble-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.ig-dm-bubble-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  max-width: 75%;
+}
+
+/* Contenedor de botones de hover */
+.ig-dm-hover-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
   pointer-events: none;
-  user-select: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.ig-dm-bubble-row:hover .ig-dm-hover-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Posición: Si es mío, a la izquierda de la burbuja. Si es otro, a la derecha. */
+.ig-dm-bubble-row.is-mine .ig-dm-hover-actions {
+  right: calc(100% + 8px);
+  flex-direction: row-reverse;
+}
+
+.ig-dm-bubble-row:not(.is-mine) .ig-dm-hover-actions {
+  left: calc(100% + 8px);
+}
+
+.ig-dm-hover-btn {
+  background: transparent;
+  color: #737373;
+  border: 0;
+  padding: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: color 0.1s ease;
+}
+
+.ig-dm-hover-btn:hover {
+  color: #f5f5f5;
+}
+
+/* MENÚ DESPLEGABLE (Instagram Style) */
+.ig-dm-more-menu-container {
+  position: absolute;
+  z-index: 1000;
+  background: #262626;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  min-width: 180px;
+  overflow: hidden;
+  animation: ig-pop-in 0.1s ease;
+}
+
+@keyframes ig-pop-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.ig-dm-menu-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #363636;
+}
+
+.ig-dm-menu-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #f5f5f5;
+}
+
+.ig-dm-menu-header span {
+  font-size: 11px;
+  color: #a8a8a8;
+}
+
+.ig-dm-menu-item {
+  width: 100%;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: 0;
+  color: #f5f5f5;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s ease;
+}
+
+.ig-dm-menu-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ig-dm-menu-item.is-danger {
+  color: #ed4956;
+}
+
+.ig-dm-menu-item .ig-dm-menu-icon {
+  margin-left: 12px;
+  color: inherit;
+  opacity: 0.8;
 }
 
 .ig-dm-bubble p {

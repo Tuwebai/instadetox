@@ -34,6 +34,7 @@ const Messages = () => {
     retryFailedMessage,
     notifyTyping,
     loadOlderMessages,
+    unsendMessage,
     searchNewMessageCandidates,
     createOrOpenConversation,
   } = useMessagesInbox({ userId: user?.id });
@@ -92,6 +93,9 @@ const Messages = () => {
                 }}
                 onRetryFailedMessage={(messageId) => {
                   void retryFailedMessage(messageId);
+                }}
+                onUnsend={(messageId) => {
+                  void unsendMessage(messageId);
                 }}
                 onLoadOlderMessages={() => {
                   void loadOlderMessages();

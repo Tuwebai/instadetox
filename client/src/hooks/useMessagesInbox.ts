@@ -56,8 +56,44 @@ export interface NewMessageUserSuggestion {
 const PAGE_SIZE = 50;
 
 export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
-  const [conversations, setConversations] = useState<InboxConversation[]>([]);
+  const [conversations, setConversationsState] = useState<InboxConversation[]>(() => {
+    if (typeof window !== "undefined" && userId) {
+      const cached = localStorage.getItem(`ig_conversations_${userId}`);
+      if (cached) {
+        try {
+          return JSON.parse(cached);
+        } catch (e) {
+          return [];
+        }
+      }
+    }
+    return [];
+  });
+
+  const setConversations = useCallback((conversations: InboxConversation[] | ((prev: InboxConversation[]) => InboxConversation[])) => {
+    setConversationsState((prev) => {
+      const next = typeof conversations === "function" ? conversations(prev) : conversations;
+      if (typeof window !== "undefined" && userId) {
+        localStorage.setItem(`ig_conversations_${userId}`, JSON.stringify(next));
+      }
+      return next;
+    });
+  }, [userId]);
+
   const [location, setLocation] = useLocation();
+
+  // Utilidad universal para generar UUID v4 (Contextos HTTPS y HTTP/Mobile)
+  const generateUUID = useCallback(() => {
+    if (typeof self !== "undefined" && self.crypto && typeof self.crypto.randomUUID === "function") {
+      return self.crypto.randomUUID();
+    }
+    // Fallback robusto para contextos inseguros (HTTP)
+    return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === "x" ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }, []);
 
   const urlConversationId = useMemo(() => {
     if (location.startsWith("/direct/t/")) {
@@ -102,6 +138,27 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   const [seenByCountByConversation, setSeenByCountByConversation] = useState<Record<string, number>>({});
   const hasBootstrappedRef = useRef(false);
   const messagesCacheRef = useRef<Record<string, InboxMessage[]>>({});
+
+  // Carga inicial síncrona de cache mensaje para evitar IIFE compleja en useRef
+  useEffect(() => {
+    if (typeof window !== "undefined" && userId) {
+      const cached = localStorage.getItem(`ig_messages_cache_${userId}`);
+      if (cached) {
+        try {
+          messagesCacheRef.current = JSON.parse(cached);
+        } catch (e) {
+          console.error("Error hidratando cache de mensajes:", e);
+        }
+      }
+    }
+  }, [userId]);
+
+  // Efecto persistencia cache mensajes
+  useEffect(() => {
+    if (typeof window !== "undefined" && userId) {
+      localStorage.setItem(`ig_messages_cache_${userId}`, JSON.stringify(messagesCacheRef.current));
+    }
+  }, [userId, messages]); // Guardar cada vez que el hilo activo cambie
   const failedMessagesRef = useRef<Record<string, InboxMessage[]>>({});
   const typingChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -148,25 +205,39 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       if (!supabase || !userId) return;
       
       const now = new Date().toISOString();
-      // Persistencia
-      void supabase.from("conversation_reads").upsert(
-        {
-          conversation_id: conversationId,
-          user_id: userId,
-          seen_at: now,
-          updated_at: now,
-        },
-        { onConflict: "conversation_id,user_id" }
-      );
+      
+      // 1. Persistencia con manejo de errores
+      try {
+        const { error } = await supabase.from("conversation_reads").upsert(
+          {
+            conversation_id: conversationId,
+            user_id: userId,
+            seen_at: now,
+            updated_at: now,
+          },
+          { onConflict: "conversation_id,user_id" }
+        );
+        if (error) console.error("Error al marcar como visto:", error);
+      } catch (err) {
+        console.error("Fallo crítico al marcar como visto:", err);
+      }
 
-      // --- BROADCAST INSTANTÁNEO ---
-      // Solo emitir si el canal de la conversación activa está listo
-      if (typingChannelRef.current && typingChannelRef.current.state === "joined") {
-        void typingChannelRef.current.send({
-          type: "broadcast",
-          event: "seen",
-          payload: { userId, seenAt: now }
-        });
+      // 2. BROADCAST INSTANTÁNEO (con reintento si el canal está conectando)
+      const broadcastSeen = () => {
+        if (typingChannelRef.current && typingChannelRef.current.state === "joined") {
+          void typingChannelRef.current.send({
+            type: "broadcast",
+            event: "seen",
+            payload: { userId, seenAt: now }
+          });
+          return true;
+        }
+        return false;
+      };
+
+      if (!broadcastSeen()) {
+        // Reintentar en 500ms si el canal estaba suscribiéndose
+        setTimeout(broadcastSeen, 500);
       }
 
       setUnreadByConversation((prev) => ({ ...prev, [conversationId]: 0 }));
@@ -232,14 +303,15 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
 
   const loadConversations = useCallback(async (options?: { silent?: boolean }) => {
     if (!supabase || !userId) {
-      setConversations([]);
-      setSelectedConversationId(null);
-      setLoadingConversations(false);
-      hasBootstrappedRef.current = true;
+      if (hasBootstrappedRef.current) {
+        setConversations([]);
+        setSelectedConversationId(null);
+        setLoadingConversations(false);
+      }
       return;
     }
 
-    const shouldShowLoading = !options?.silent && !hasBootstrappedRef.current;
+    const shouldShowLoading = !options?.silent;
     if (shouldShowLoading) {
       setLoadingConversations(true);
     }
@@ -599,11 +671,18 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     [findExistingDirectConversation, loadConversations, userId],
   );
 
-  const loadMessages = useCallback(async (conversationId: string, options?: { silent?: boolean }) => {
+  const loadMessages = useCallback(async (conversation_id: string, options?: { silent?: boolean }) => {
     if (!supabase) return;
 
     const shouldShowLoading = !options?.silent;
-    if (shouldShowLoading) {
+    const cached = messagesCacheRef.current[conversation_id] ?? [];
+    
+    // Hidratación instantánea
+    if (cached.length > 0) {
+      setMessages(cached);
+    }
+    
+    if (shouldShowLoading && cached.length === 0) {
       setLoadingMessages(true);
     }
 
@@ -613,7 +692,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         const response = await supabase
           .from("messages")
           .select("id, conversation_id, sender_id, body, created_at")
-          .eq("conversation_id", conversationId)
+          .eq("conversation_id", conversation_id)
           .order("created_at", { ascending: true })
           .limit(PAGE_SIZE);
         data = (response.data ?? []) as MessageRow[];
@@ -630,20 +709,27 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         deliveryState: "sent" as const,
       }));
 
-      const failedMessages = failedMessagesRef.current[conversationId] ?? [];
+      const failedMessages = failedMessagesRef.current[conversation_id] ?? [];
       const merged = [...nextMessages, ...failedMessages].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       );
 
-      messagesCacheRef.current[conversationId] = merged;
+      messagesCacheRef.current[conversation_id] = merged;
       setMessages(merged);
       setHasMoreMessages(nextMessages.length >= PAGE_SIZE);
+
+      // --- FALLBACK DE VISTO (Mobile Stability) ---
+      void loadPeerSeenAt(conversation_id);
+      const latestOwnSentAt = [...merged]
+        .reverse()
+        .find((m) => m.senderId === userId && m.deliveryState === "sent")?.createdAt ?? null;
+      void loadSeenByCount(conversation_id, latestOwnSentAt);
     } finally {
       if (shouldShowLoading) {
         setLoadingMessages(false);
       }
     }
-  }, []);
+  }, [loadPeerSeenAt, loadSeenByCount, userId]);
 
   const loadOlderMessages = useCallback(async () => {
     if (!supabase || !selectedConversationId || loadingOlderMessages || !hasMoreMessages) return;
@@ -692,7 +778,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       const trimmed = body.trim();
       if (!trimmed) return false;
 
-      const finalId = self.crypto.randomUUID();
+      const finalId = generateUUID();
       const now = new Date().toISOString();
       const message: InboxMessage = {
         id: finalId,
@@ -766,6 +852,41 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     [selectedConversationId, sendMessage],
   );
 
+  const unsendMessage = useCallback(
+    async (messageId: string) => {
+      if (!supabase || !selectedConversationId) return false;
+
+      // 1. BROADCAST INSTANTÁNEO (0ms para los demás)
+      if (typingChannelRef.current && typingChannelRef.current.state === "joined") {
+        void typingChannelRef.current.send({
+          type: "broadcast",
+          event: "delete_message",
+          payload: { messageId, conversationId: selectedConversationId }
+        });
+      }
+
+      // 2. Actualización Local Instantánea
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      messagesCacheRef.current[selectedConversationId] = (messagesCacheRef.current[selectedConversationId] ?? []).filter(
+        (m) => m.id !== messageId
+      );
+
+      // 3. Persistencia Silenciosa
+      void (async () => {
+        const { error } = await supabase.from("messages").delete().eq("id", messageId);
+        if (error) {
+          console.error("Error al anular envío:", error);
+          // Opcional: Podríamos restaurar el mensaje si falla, pero en IG suele ser destructivo
+        } else {
+          void loadConversations({ silent: true });
+        }
+      })();
+
+      return true;
+    },
+    [loadConversations, selectedConversationId],
+  );
+
   useEffect(() => {
     void loadConversations();
   }, [loadConversations]);
@@ -830,6 +951,19 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
           [msg.conversationId]: (prev[msg.conversationId] ?? 0) + 1,
         }));
       }
+    });
+
+    globalChannel.on("broadcast", { event: "delete_message" }, ({ payload }) => {
+      const { messageId, conversationId } = payload || {};
+      if (!messageId || !conversationId) return;
+
+      if (selectedConversationIdRef.current === conversationId) {
+        setMessages((prev) => prev.filter((m) => m.id !== messageId));
+        messagesCacheRef.current[conversationId] = (messagesCacheRef.current[conversationId] ?? []).filter(
+          (m) => m.id !== messageId
+        );
+      }
+      void loadConversations({ silent: true });
     });
 
     globalChannel.subscribe();
@@ -951,6 +1085,17 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       }));
     });
 
+
+
+    channel.on("broadcast", { event: "delete_message" }, ({ payload }) => {
+      const { messageId } = payload || {};
+      if (!messageId) return;
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
+      messagesCacheRef.current[selectedConversationId] = (messagesCacheRef.current[selectedConversationId] ?? []).filter(
+        (m) => m.id !== messageId
+      );
+    });
+
     // 3. Evento Mensaje Nuevo (Entrega 0ms si el chat está abierto)
     channel.on("broadcast", { event: "new_message" }, ({ payload }) => {
       const msg = payload as InboxMessage | null;
@@ -1004,7 +1149,14 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   useEffect(() => {
     if (!selectedConversationId) return;
     void markConversationSeen(selectedConversationId);
-  }, [markConversationSeen, selectedConversationId]);
+    // Asegurar carga de vistos al cambiar de conversación
+    void loadPeerSeenAt(selectedConversationId);
+    const currentMessages = messagesCacheRef.current[selectedConversationId] ?? [];
+    const latestOwnSentAt = [...currentMessages]
+      .reverse()
+      .find((m) => m.senderId === userId && m.deliveryState === "sent")?.createdAt ?? null;
+    void loadSeenByCount(selectedConversationId, latestOwnSentAt);
+  }, [loadPeerSeenAt, loadSeenByCount, markConversationSeen, selectedConversationId, userId]);
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedConversationId) ?? null,
@@ -1047,6 +1199,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     retryFailedMessage,
     notifyTyping,
     loadOlderMessages,
+    unsendMessage,
     searchNewMessageCandidates,
     createOrOpenConversation,
   };

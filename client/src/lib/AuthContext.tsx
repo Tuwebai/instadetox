@@ -29,7 +29,7 @@ interface AuthContextProps {
 }
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
-const PROFILE_TIMEOUT_MS = 6000;
+const PROFILE_TIMEOUT_MS = 1500; // Reducido de 6s para no bloquear Splash
 const SUPABASE_AUTH_KEY_SUFFIX = "-auth-token";
 
 const isSupabaseAuthLikeUser = (value: unknown): value is Pick<SupabaseAuthUser, "id" | "email" | "user_metadata"> =>
@@ -178,6 +178,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const init = async () => {
+      // Guard de seguridad global: liberar loading en max 1.2s pase lo que pase
+      const safetyTimeout = setTimeout(() => {
+        if (isMounted) setLoading(false);
+      }, 1200);
+
       try {
         setLoading(true);
         setError(null);
@@ -188,14 +193,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } = await client.auth.getSession();
 
         if (sessionError) throw sessionError;
-        await hydrateFromSession(session?.user ?? null);
+        
+        // Hidratación en segundo plano (silenciosa)
+        void hydrateFromSession(session?.user ?? null);
       } catch (err) {
         if (isMounted) {
           setUser(null);
           setError(err as Error);
         }
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          clearTimeout(safetyTimeout);
+          setLoading(false);
+        }
       }
     };
 

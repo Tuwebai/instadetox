@@ -17,12 +17,13 @@ import Login from "@/pages/Login";
 import NotFound from "@/pages/not-found";
 import { useState } from "react";
 import { AuthProvider, useAuth } from "@/lib/AuthContext";
+import SplashScreen from "@/components/ui/SplashScreen";
 
 function AppRoutes() {
   const { user, loading } = useAuth();
 
-  if (loading && !user) {
-    return null;
+  if (loading) {
+    return <SplashScreen />;
   }
 
   if (!user) {

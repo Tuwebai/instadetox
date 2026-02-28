@@ -17,6 +17,7 @@ interface MessagesThreadViewProps {
   onDraftChange: (value: string) => void;
   onSend: () => void;
   onRetryFailedMessage: (messageId: string) => void;
+  onUnsend: (messageId: string) => void;
   onLoadOlderMessages: () => void;
 }
 
@@ -58,12 +59,25 @@ const MessagesThreadView = ({
   onDraftChange,
   onSend,
   onRetryFailedMessage,
+  onUnsend,
   onLoadOlderMessages,
 }: MessagesThreadViewProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomAnchorRef = useRef<HTMLDivElement>(null);
   const prevMessagesLengthRef = useRef(messages.length);
   const latestPeerMsgIdRef = useRef<string | null>(null);
+
+  /** ID del mensaje que tiene el menú "Más" abierto */
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
+  // Cerrar menú al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = () => setActiveMenuId(null);
+    if (activeMenuId) {
+      window.addEventListener("click", handleClickOutside);
+    }
+    return () => window.removeEventListener("click", handleClickOutside);
+  }, [activeMenuId]);
 
   /** Mensajes nuevos del peer que el user no ha visto (está scrolleado arriba) */
   const [unreadPeerCount, setUnreadPeerCount] = useState(0);
@@ -268,6 +282,94 @@ const MessagesThreadView = ({
                       </button>
                     ) : null}
                   </article>
+
+                  {/* BOTONES DE HOVER */}
+                  <div className="ig-dm-hover-actions">
+                    <button 
+                      type="button" 
+                      className="ig-dm-hover-btn" 
+                      aria-label="Más" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuId(activeMenuId === message.id ? null : message.id);
+                      }}
+                    >
+                      <svg aria-label="Más" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
+                        <circle cx="12" cy="12" r="1.5"></circle>
+                        <circle cx="6" cy="12" r="1.5"></circle>
+                        <circle cx="18" cy="12" r="1.5"></circle>
+                      </svg>
+                    </button>
+                    <button type="button" className="ig-dm-hover-btn" aria-label="Responder">
+                      <svg aria-label="Responder" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
+                        <path d="M21 17.502a.997.997 0 0 1-.707-.293L16.086 13l4.207-4.209a1 1 0 0 1 1.414 1.414L18.914 13l2.793 2.793a1 1 0 0 1-.707 1.709Z"></path>
+                        <path d="M21 14H7.414l4.293 4.293a1 1 0 1 1-1.414 1.414l-6-6a1 1 0 0 1 0-1.414l6-6a1 1 0 0 1 1.414 1.414L7.414 12H21a1 1 0 0 1 0 2Z"></path>
+                      </svg>
+                    </button>
+                    <button type="button" className="ig-dm-hover-btn" aria-label="Reaccionar">
+                      <svg aria-label="Reaccionar" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
+                        <path d="M15.83 10.997a1.167 1.167 0 1 0 1.167 1.167 1.167 1.167 0 0 0-1.167-1.167Zm-6.5 1.167a1.167 1.167 0 1 0-1.166 1.167 1.167 1.167 0 0 0 1.166-1.167Zm5.163 3.24a3.406 3.406 0 0 1-4.982.007 1 1 0 1 0-1.557 1.256 5.397 5.397 0 0 0 8.09 0 1 1 0 0 0-1.55-1.263ZM12 .503a11.5 11.5 0 1 0 11.5 11.5A11.513 11.513 0 0 0 12 .503Zm0 21a9.5 9.5 0 1 1 9.5-9.5 9.51 9.51 0 0 1-9.5 9.5Z"></path>
+                      </svg>
+                    </button>
+                  </div>
+
+                  {/* MENÚ "MÁS" DESPLEGABLE */}
+                  {activeMenuId === message.id && (
+                    <div 
+                      className="ig-dm-more-menu-container" 
+                      style={{ 
+                        bottom: 'calc(100% + 4px)', 
+                        right: mine ? '0' : 'auto',
+                        left: mine ? 'auto' : '0'
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="ig-dm-menu-header">
+                        <h3>{new Date(message.createdAt).toLocaleDateString('es-AR', { weekday: 'long' })}</h3>
+                        <span>{formatMessageTime(message.createdAt)}</span>
+                      </div>
+                      
+                      <button type="button" className="ig-dm-menu-item">
+                        <span>Reenviar</span>
+                        <svg aria-label="Reenviar" className="ig-dm-menu-icon" fill="currentColor" height="18" role="img" viewBox="0 0 24 24" width="18">
+                          <path d="M13.973 20.046 21.77 6.928C22.8 5.195 21.55 3 19.535 3H4.466C2.138 3 .984 5.825 2.646 7.456l4.842 4.752 1.723 7.121c.548 2.266 3.571 2.721 4.762.717Z" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="2"></path>
+                          <line fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" x1="7.488" x2="15.515" y1="12.208" y2="7.641"></line>
+                        </svg>
+                      </button>
+
+                      <button 
+                        type="button" 
+                        className="ig-dm-menu-item"
+                        onClick={() => {
+                          navigator.clipboard.writeText(message.body);
+                          setActiveMenuId(null);
+                        }}
+                      >
+                        <span>Copiar</span>
+                        <svg aria-label="Copiar" className="ig-dm-menu-icon" fill="currentColor" height="18" role="img" viewBox="0 0 24 24" width="18">
+                          <path d="m20.12 4.707-2.826-2.828A3.026 3.026 0 0 0 15.17 1h-5.167A3.007 3.007 0 0 0 7 4.004V5h-.996A3.007 3.007 0 0 0 3 8.004v11.992A3.007 3.007 0 0 0 6.004 23h7.992A3.007 3.007 0 0 0 17 19.996V19h.996A3.007 3.007 0 0 0 21 15.996V6.83a2.98 2.98 0 0 0-.88-2.123ZM18.586 6 16 6.001V3.414L18.586 6ZM15 19.996C15 20.55 14.55 21 13.996 21H6.004C5.45 21 5 20.55 5 19.996V8.004C5 7.45 5.45 7 6.004 7H7v8.996A3.007 3.007 0 0 0 10.004 19H15v.996ZM17.996 17h-7.992C9.45 17 9 16.55 9 15.996V4.004C9 3.45 9.45 3 10.004 3H14v3.001A2 2 0 0 0 15.999 8H19v7.996C19 16.55 18.55 17 17.996 17Z"></path>
+                        </svg>
+                      </button>
+
+                      {mine && (
+                        <button 
+                          type="button" 
+                          className="ig-dm-menu-item is-danger"
+                          onClick={() => {
+                            onUnsend(message.id);
+                            setActiveMenuId(null);
+                          }}
+                        >
+                          <span>Anular envío</span>
+                          <svg aria-label="Anular envío" className="ig-dm-menu-icon" fill="currentColor" height="18" role="img" viewBox="0 0 24 24" width="18">
+                            <path d="M12 .5C5.659.5.5 5.66.5 12S5.659 23.5 12 23.5c6.34 0 11.5-5.16 11.5-11.5S18.34.5 12 .5Zm0 21c-5.238 0-9.5-4.262-9.5-9.5S6.762 2.5 12 2.5s9.5 4.262 9.5 9.5-4.262 9.5-9.5 9.5Z"></path>
+                            <path d="M14.5 10H9.414l1.293-1.293a1 1 0 1 0-1.414-1.414l-3 2.999a1 1 0 0 0 0 1.414l3 3.001a.997.997 0 0 0 1.414 0 1 1 0 0 0 0-1.414L9.415 12H14.5c.827 0 1.5.674 1.5 1.501 0 .395-.157.794-.431 1.096-.227.249-.508.403-.735.403L14 14.999a1 1 0 0 0-.001 2l.833.001h.002c.796 0 1.604-.386 2.215-1.059a3.625 3.625 0 0 0 .951-2.44C18 11.571 16.43 10 14.5 10Z"></path>
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  )}
+
                   {mine && 
                    messages[messages.length - 1]?.id === message.id && 
                    peerSeenAt && 
@@ -275,6 +377,10 @@ const MessagesThreadView = ({
                     <span 
                       className="x1lliihq x1plvlek xryxfnj x1n2onr6 xyejjpt x15dsfln x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x x1i0vuye x1fhwpqd xo1l8bm x1roi4f4 x1s3etm8 x676frb x10wh9bi xpm28yp x8viiok x1o7cslx ig-dm-seen-status" 
                       dir="auto"
+                      style={{ 
+                        "--x---base-line-clamp-line-height": "16px", 
+                        "--x-lineHeight": "16px" 
+                      } as React.CSSProperties}
                     >
                       {formatSeenTime(peerSeenAt)}
                     </span>
