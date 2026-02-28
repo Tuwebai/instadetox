@@ -2843,44 +2843,52 @@
   border-top-right-radius: 8px;
 }
 
-/* Banner "Respondiendo a @username" sobre el textarea */
+/* Banner "Respondiendo a @username" — encima del textarea, SIN fondo como en IG */
 .ig-dm-reply-banner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 12px 6px 12px;
-  border-top: 1px solid var(--ig-separator);
-  background-color: var(--ig-primary-background);
+  padding: 8px 16px;
+  /* sin background — paridad IG */
+  border-top: 1px solid var(--ig-separator, rgba(255,255,255,0.08));
 }
 
 .ig-dm-reply-banner-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
   min-width: 0;
   flex: 1;
 }
 
+/* "Respondiendo a username" — line-height: 18px como IG */
 .ig-dm-reply-banner-label {
-  font-size: 12px;
-  color: var(--secondary-label);
-}
-
-.ig-dm-reply-banner-label strong {
-  font-weight: 600;
-  color: var(--primary-text);
-}
-
-.ig-dm-reply-banner-body {
-  font-size: 12px;
-  margin: 0;
+  font-size: 14px;
+  line-height: 18px;
   color: var(--secondary-label);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* El username va bold y en color primario */
+.ig-dm-reply-banner-username {
+  font-weight: 600;
+  color: var(--primary-text);
+}
+
+/* Texto del mensaje citado — line-height: 16px como en IG */
+.ig-dm-reply-banner-body {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--secondary-label);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Botón cancelar — replica el aria-label="Cancelar respuesta" de IG */
 .ig-dm-reply-cancel-btn {
   background: transparent;
   border: 0;
@@ -2984,10 +2992,11 @@
 
 .ig-dm-thread-composer {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 14px 16px;
+  flex-direction: column; /* banner ARRIBA, composer-wrap ABAJO */
+  align-items: stretch;
+  gap: 0;
   border-top: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 0; /* el padding lo maneja cada hijo */
 }
 
 .ig-dm-thread-composer input {

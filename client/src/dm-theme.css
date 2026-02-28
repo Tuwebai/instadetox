@@ -1581,7 +1581,7 @@
 
 /* Composer / Footer */
 .ig-dm-thread-composer {
-  padding: 16px;
+  padding: 0;
   flex-shrink: 0;
   position: relative;
   background: rgb(var(--ig-primary-background));
@@ -1596,6 +1596,9 @@
   padding: 0 16px;
   background-color: transparent;
   width: 100%;
+  box-sizing: border-box;
+  margin: 10px 16px;
+  width: calc(100% - 32px);
 }
 
 .ig-dm-composer-left,

@@ -485,6 +485,48 @@ const MessagesThreadView = ({
       ) : null}
 
       <footer className="ig-dm-thread-composer">
+
+        {/* REPLY BANNER — encima del input, sin fondo, paridad IG */}
+        {replyingTo ? (
+          <div className="ig-dm-reply-banner">
+            <div className="ig-dm-reply-banner-content">
+              <span
+                className="ig-dm-reply-banner-label"
+                dir="auto"
+                style={{ "--x---base-line-clamp-line-height": "19.9995px", "--x-lineHeight": "19.9995px" } as React.CSSProperties}
+              >
+                <span style={{ lineHeight: "18px" }}>
+                  Respondiendo a{" "}
+                  <span className="ig-dm-reply-banner-username" style={{ lineHeight: "18px" }}>
+                    {replyingTo.username ?? "Usuario"}
+                  </span>
+                </span>
+              </span>
+              <span
+                className="ig-dm-reply-banner-body"
+                dir="auto"
+                style={{ "--x---base-line-clamp-line-height": "16px", "--x-lineHeight": "16px" } as React.CSSProperties}
+              >
+                {replyingTo.body}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="ig-dm-reply-cancel-btn"
+              onClick={onCancelReply}
+              aria-label="Cancelar respuesta"
+            >
+              <div className="ig-dm-reply-cancel-icon">
+                <svg aria-label="Cancelar respuesta" fill="currentColor" height="12" role="img" viewBox="0 0 24 24" width="12">
+                  <title>Cancelar respuesta</title>
+                  <polyline fill="none" points="20.643 3.357 12 12 3.353 20.647" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" />
+                  <line fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" x1="20.649" x2="3.354" y1="20.649" y2="3.354" />
+                </svg>
+              </div>
+            </button>
+          </div>
+        ) : null}
+
         <div className="ig-dm-composer-wrap">
           <div className="ig-dm-composer-left">
             <button type="button" aria-label="Elegir un emoji">
@@ -494,26 +536,6 @@ const MessagesThreadView = ({
             </button>
           </div>
           <div className="ig-dm-composer-input">
-            {replyingTo ? (
-              <div className="ig-dm-reply-banner">
-                <div className="ig-dm-reply-banner-content">
-                  <span className="ig-dm-reply-banner-label">
-                    Respondiendo a <strong>{replyingTo.username ?? "Usuario"}</strong>
-                  </span>
-                  <p className="ig-dm-reply-banner-body">{replyingTo.body}</p>
-                </div>
-                <button
-                  type="button"
-                  className="ig-dm-reply-cancel-btn"
-                  onClick={onCancelReply}
-                  aria-label="Cancelar respuesta"
-                >
-                  <svg fill="currentColor" height="12" viewBox="0 0 24 24" width="12" aria-hidden="true">
-                    <path d="M19.71 18.29l-5.3-5.3 5.3-5.3a1 1 0 0 0-1.42-1.42l-5.3 5.3-5.3-5.3A1 1 0 0 0 6.29 7.71l5.3 5.3-5.3 5.3a1 1 0 0 0 1.42 1.42l5.3-5.3 5.3 5.3a1 1 0 0 0 1.42-1.42z" />
-                  </svg>
-                </button>
-              </div>
-            ) : null}
             <textarea
               rows={1}
               value={draft}
