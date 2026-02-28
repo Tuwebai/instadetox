@@ -2679,6 +2679,17 @@
   margin-bottom: 2px;
 }
 
+.ig-dm-message-line {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* Separación fija entre mensaje y botones */
+}
+
+/* Si es nuestro, los botones van a la izquierda del mensaje */
+.ig-dm-message-line.is-mine {
+  flex-direction: row-reverse;
+}
+
 .ig-dm-bubble-wrapper {
   position: relative;
   display: flex;
@@ -2686,17 +2697,19 @@
   max-width: 75%;
 }
 
-/* Contenedor de botones de hover */
 .ig-dm-hover-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px; /* Gap entre SVGs */
   opacity: 0;
   transition: opacity 0.15s ease;
   pointer-events: none;
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
+  flex-shrink: 0;
+}
+
+/* Invierte el orden de los botones internos para que 'Reaccionar' quede pegado a la burbuja */
+.ig-dm-message-line.is-mine .ig-dm-hover-actions {
+  flex-direction: row-reverse;
 }
 
 .ig-dm-bubble-row:hover .ig-dm-hover-actions {
@@ -2704,31 +2717,24 @@
   pointer-events: auto;
 }
 
-/* Posición: Si es mío, a la izquierda de la burbuja. Si es otro, a la derecha. */
-.ig-dm-bubble-row.is-mine .ig-dm-hover-actions {
-  right: calc(100% + 8px);
-  flex-direction: row-reverse;
-}
-
-.ig-dm-bubble-row:not(.is-mine) .ig-dm-hover-actions {
-  left: calc(100% + 8px);
-}
-
 .ig-dm-hover-btn {
   background: transparent;
-  color: #737373;
+  color: var(--always-gray-75); /* Token del tema */
   border: 0;
-  padding: 4px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  transition: color 0.1s ease;
+  transition: background-color 0.15s ease, color 0.1s ease;
 }
 
 .ig-dm-hover-btn:hover {
-  color: #f5f5f5;
+  background-color: var(--hover-overlay); /* Token de IG para overlay hover */
+  color: var(--always-gray-95);
 }
 
 /* MENÚ DESPLEGABLE (Instagram Style) */

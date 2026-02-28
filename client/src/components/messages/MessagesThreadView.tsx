@@ -270,47 +270,51 @@ const MessagesThreadView = ({
                 ) : null}
 
                 <div className={`ig-dm-bubble-wrapper${mine ? " is-mine" : ""}`}>
-                  <article className={`ig-dm-bubble ${groupClass} ${mine ? "is-mine" : ""}${message.deliveryState === "sending" ? " is-sending" : ""}`}>
-                    <p>{message.body}</p>
-                    {mine && message.deliveryState === "failed" ? (
-                      <button
-                        type="button"
-                        className="ig-dm-retry-btn"
-                        onClick={() => onRetryFailedMessage(message.id)}
-                      >
-                        Reintentar
-                      </button>
-                    ) : null}
-                  </article>
+                  <div className={`ig-dm-message-line${mine ? " is-mine" : ""}`}>
+                    <article className={`ig-dm-bubble ${groupClass} ${mine ? "is-mine" : ""}${message.deliveryState === "sending" ? " is-sending" : ""}`}>
+                      <p>{message.body}</p>
+                      {mine && message.deliveryState === "failed" ? (
+                        <button
+                          type="button"
+                          className="ig-dm-retry-btn"
+                          onClick={() => onRetryFailedMessage(message.id)}
+                        >
+                          Reintentar
+                        </button>
+                      ) : null}
+                    </article>
 
-                  {/* BOTONES DE HOVER */}
-                  <div className="ig-dm-hover-actions">
-                    <button 
-                      type="button" 
-                      className="ig-dm-hover-btn" 
-                      aria-label="Más" 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveMenuId(activeMenuId === message.id ? null : message.id);
-                      }}
-                    >
-                      <svg aria-label="Más" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
-                        <circle cx="12" cy="12" r="1.5"></circle>
-                        <circle cx="6" cy="12" r="1.5"></circle>
-                        <circle cx="18" cy="12" r="1.5"></circle>
-                      </svg>
-                    </button>
-                    <button type="button" className="ig-dm-hover-btn" aria-label="Responder">
-                      <svg aria-label="Responder" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
-                        <path d="M21 17.502a.997.997 0 0 1-.707-.293L16.086 13l4.207-4.209a1 1 0 0 1 1.414 1.414L18.914 13l2.793 2.793a1 1 0 0 1-.707 1.709Z"></path>
-                        <path d="M21 14H7.414l4.293 4.293a1 1 0 1 1-1.414 1.414l-6-6a1 1 0 0 1 0-1.414l6-6a1 1 0 0 1 1.414 1.414L7.414 12H21a1 1 0 0 1 0 2Z"></path>
-                      </svg>
-                    </button>
-                    <button type="button" className="ig-dm-hover-btn" aria-label="Reaccionar">
-                      <svg aria-label="Reaccionar" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
-                        <path d="M15.83 10.997a1.167 1.167 0 1 0 1.167 1.167 1.167 1.167 0 0 0-1.167-1.167Zm-6.5 1.167a1.167 1.167 0 1 0-1.166 1.167 1.167 1.167 0 0 0 1.166-1.167Zm5.163 3.24a3.406 3.406 0 0 1-4.982.007 1 1 0 1 0-1.557 1.256 5.397 5.397 0 0 0 8.09 0 1 1 0 0 0-1.55-1.263ZM12 .503a11.5 11.5 0 1 0 11.5 11.5A11.513 11.513 0 0 0 12 .503Zm0 21a9.5 9.5 0 1 1 9.5-9.5 9.51 9.51 0 0 1-9.5 9.5Z"></path>
-                      </svg>
-                    </button>
+                    {/* BOTONES DE HOVER */}
+                    <div className="ig-dm-hover-actions">
+                      <button type="button" className="ig-dm-hover-btn" aria-label="Reaccionar">
+                        <svg aria-label="Reaccionar al mensaje" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
+                          <title>Reaccionar</title>
+                          <path d="M15.83 10.997a1.167 1.167 0 1 0 1.167 1.167 1.167 1.167 0 0 0-1.167-1.167Zm-6.5 1.167a1.167 1.167 0 1 0-1.166 1.167 1.167 1.167 0 0 0 1.166-1.167Zm5.163 3.24a3.406 3.406 0 0 1-4.982.007 1 1 0 1 0-1.557 1.256 5.397 5.397 0 0 0 8.09 0 1 1 0 0 0-1.55-1.263ZM12 .503a11.5 11.5 0 1 0 11.5 11.5A11.513 11.513 0 0 0 12 .503Zm0 21a9.5 9.5 0 1 1 9.5-9.5 9.51 9.51 0 0 1-9.5 9.5Z"></path>
+                        </svg>
+                      </button>
+                      <button type="button" className="ig-dm-hover-btn" aria-label="Responder">
+                        <svg aria-label="Responder mensaje" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
+                          <title>Responder</title>
+                          <path d="M14 8.999H4.413l5.294-5.292a1 1 0 1 0-1.414-1.414l-7 6.998c-.014.014-.019.033-.032.048A.933.933 0 0 0 1 9.998V10c0 .027.013.05.015.076a.907.907 0 0 0 .282.634l6.996 6.998a1 1 0 0 0 1.414-1.414L4.415 11H14a7.008 7.008 0 0 1 7 7v3.006a1 1 0 0 0 2 0V18a9.01 9.01 0 0 0-9-9Z"></path>
+                        </svg>
+                      </button>
+                      <button 
+                        type="button" 
+                        className="ig-dm-hover-btn" 
+                        aria-label="Más" 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveMenuId(activeMenuId === message.id ? null : message.id);
+                        }}
+                      >
+                        <svg aria-label="Ver más opciones" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
+                          <title>Más</title>
+                          <circle cx="12" cy="12" r="1.5"></circle>
+                          <circle cx="12" cy="6" r="1.5"></circle>
+                          <circle cx="12" cy="18" r="1.5"></circle>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
 
                   {/* MENÚ "MÁS" DESPLEGABLE */}
