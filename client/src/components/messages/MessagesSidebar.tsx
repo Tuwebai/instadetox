@@ -6,10 +6,10 @@ interface MessagesSidebarProps {
   selectedConversationId: string | null;
   unreadByConversation: Record<string, number>;
   requestConversationIds: string[];
-  activeTab: "primary" | "general" | "requests";
+  activeTab: "primary" | "requests";
   searchValue: string;
   onSearchChange: (value: string) => void;
-  onTabChange: (tab: "primary" | "general" | "requests") => void;
+  onTabChange: (tab: "primary" | "requests") => void;
   onSelectConversation: (conversationId: string) => void;
   onCreateMessage: () => void;
   loadingConversations: boolean;
@@ -22,12 +22,15 @@ const formatRelativeTime = (isoDate: string) => {
   const now = Date.now();
   const value = new Date(isoDate).getTime();
   const deltaMs = Math.max(0, now - value);
-  const deltaHours = Math.floor(deltaMs / (1000 * 60 * 60));
+  const deltaSeconds = Math.floor(deltaMs / 1000);
+  const deltaMinutes = Math.floor(deltaSeconds / 60);
+  const deltaHours = Math.floor(deltaMinutes / 60);
   const deltaDays = Math.floor(deltaHours / 24);
 
-  if (deltaHours < 1) return "ahora";
+  if (deltaMinutes < 1) return "ahora";
+  if (deltaMinutes < 60) return `${deltaMinutes} min`;
   if (deltaHours < 24) return `${deltaHours} h`;
-  if (deltaDays < 7) return `${deltaDays} d`;
+  if (deltaDays < 7) return `${deltaDays} dias`;
   return new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" }).format(new Date(isoDate));
 };
 
@@ -82,8 +85,6 @@ const MessagesSidebar = ({
     .filter((conversation) => !requestSet.has(conversation.id))
     .filter((conversation) => (unreadByConversation[conversation.id] ?? 0) === 0)
     .sort(sortByRecentActivity);
-
-  const generalConversations = primaryConversations;
 
   const quickItems = filteredConversations.slice(0, 8);
 
@@ -165,47 +166,22 @@ const MessagesSidebar = ({
 
       {/* "Quick Items/Stories" removal requested by user */}
 
-      <div className="ig-dm-inbox-tabs" role="tablist" aria-label="Categorias de inbox">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "primary"}
-          className={`ig-dm-inbox-tab${activeTab === "primary" ? " is-active" : ""}`}
-          onClick={() => onTabChange("primary")}
+      <div className="ig-dm-sidebar-list-header">
+        <h1 className="ig-dm-sidebar-h1">Mensajes</h1>
+        <button 
+          type="button" 
+          className="ig-dm-requests-link"
+          onClick={() => onTabChange(activeTab === "requests" ? "primary" : "requests")}
         >
-          Principal
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "general"}
-          className={`ig-dm-inbox-tab${activeTab === "general" ? " is-active" : ""}`}
-          onClick={() => onTabChange("general")}
-        >
-          General
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={activeTab === "requests"}
-          className={`ig-dm-inbox-tab${activeTab === "requests" ? " is-active" : ""}`}
-          onClick={() => onTabChange("requests")}
-        >
-          Solicitudes
-          {requestConversations.length > 0 ? (
-            <span className="ig-dm-tab-badge">
-              {requestConversations.length > 9 ? "9+" : requestConversations.length}
-            </span>
-          ) : null}
+          {activeTab === "requests" 
+            ? "Bandeja de entrada" 
+            : `Solicitudes${requestConversationIds.length > 0 ? ` (${requestConversationIds.length})` : ""}`}
         </button>
       </div>
 
       <div className="ig-dm-conversations">
             {activeTab === "requests" && requestConversations.length === 0 ? (
               <p className="ig-dm-empty-list">No hay solicitudes de mensajes.</p>
-            ) : null}
-            {activeTab === "general" && generalConversations.length === 0 ? (
-              <p className="ig-dm-empty-list">No hay conversaciones en general.</p>
             ) : null}
             {activeTab === "requests" ? (
               requestConversations.map((conversation) => {
@@ -239,52 +215,6 @@ const MessagesSidebar = ({
                     <div className="ig-dm-conversation-preview-row">
                       <div className="ig-dm-conversation-preview-text">
                         <span>{conversation.preview ?? "Solicitud de mensaje."}</span>
-                        <div className="ig-dm-conversation-time-wrap">
-                          <span className="ig-dm-conversation-dot"> · </span>
-                          <span className="ig-dm-conversation-time">
-                            <abbr>{formatRelativeTime(conversation.previewAt ?? conversation.updatedAt)}</abbr>
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </button>
-            );
-          })
-            ) : null}
-            {activeTab === "general" ? (
-              generalConversations.map((conversation) => {
-            const selected = selectedConversationId === conversation.id;
-            return (
-              <button
-                key={conversation.id}
-                type="button"
-                className={`ig-dm-conversation-item${selected ? " is-active" : ""}`}
-                onClick={() => onSelectConversation(conversation.id)}
-              >
-                <div className="ig-dm-conversation-inner-wrap">
-                  <div className="ig-dm-conversation-avatar-box">
-                    <span className="ig-dm-conversation-avatar-span">
-                      <img
-                        src={conversation.avatarUrl ?? AVATAR_FALLBACK_URL}
-                        alt=""
-                        width={56}
-                        height={56}
-                        className="ig-dm-avatar"
-                        referrerPolicy="origin-when-cross-origin"
-                      />
-                    </span>
-                  </div>
-                  <div className="ig-dm-conversation-body">
-                    <div className="ig-dm-conversation-title-row">
-                      <span className="ig-dm-conversation-title" title={conversation.title}>
-                        {conversation.title}
-                      </span>
-                    </div>
-                    <div className="ig-dm-conversation-preview-row">
-                      <div className="ig-dm-conversation-preview-text">
-                        <span>{conversation.preview ?? "Envia un mensaje para iniciar la charla."}</span>
                         <div className="ig-dm-conversation-time-wrap">
                           <span className="ig-dm-conversation-dot"> · </span>
                           <span className="ig-dm-conversation-time">

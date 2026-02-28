@@ -29,6 +29,20 @@ const NEAR_BOTTOM_THRESHOLD = 120;
 const formatMessageTime = (isoDate: string) =>
   new Intl.DateTimeFormat("es-AR", { hour: "2-digit", minute: "2-digit" }).format(new Date(isoDate));
 
+const formatSeenTime = (isoDate: string) => {
+  const now = Date.now();
+  const value = new Date(isoDate).getTime();
+  const deltaMs = Math.max(0, now - value);
+  const deltaSeconds = Math.floor(deltaMs / 1000);
+  const deltaMinutes = Math.floor(deltaSeconds / 60);
+  const deltaHours = Math.floor(deltaMinutes / 60);
+
+  if (deltaMinutes < 1) return "Visto hace un momento";
+  if (deltaMinutes < 60) return `Visto Hace ${deltaMinutes} min`;
+  if (deltaHours < 24) return `Visto Hace ${deltaHours} h`;
+  return `Visto el ${new Intl.DateTimeFormat("es-AR", { day: "numeric", month: "short" }).format(new Date(isoDate))}`;
+};
+
 const MessagesThreadView = ({
   currentUserId,
   selectedConversation,
@@ -209,47 +223,63 @@ const MessagesThreadView = ({
             </button>
           </div>
         ) : (
-          messages.map((message) => {
+          messages.map((message, index) => {
             const mine = message.senderId === currentUserId;
-            const isSeenInDirect = Boolean(
-              peerSeenAt && new Date(peerSeenAt).getTime() >= new Date(message.createdAt).getTime(),
-            );
-            const shouldShowSeen =
-              latestOwnSentMessageId === message.id &&
-              (otherParticipantCount > 1 ? seenByCount > 0 : isSeenInDirect);
-            const deliveryLabel =
-              message.deliveryState === "sending"
-                ? "Enviando..."
-                : message.deliveryState === "failed"
-                  ? "Fallido"
-                  : shouldShowSeen
-                    ? otherParticipantCount > 1
-                      ? `Visto por ${seenByCount}`
-                      : "Visto"
-                    : "Enviado";
+            // Lógica de agrupación (First, Middle, Last)
+            const prevMessage = messages[index - 1];
+            const nextMessage = messages[index + 1];
+            const isFirstInGroup = !prevMessage || prevMessage.senderId !== message.senderId;
+            const isLastInGroup = !nextMessage || nextMessage.senderId !== message.senderId;
+            const isMiddleInGroup = !isFirstInGroup && !isLastInGroup;
+            const isSingle = isFirstInGroup && isLastInGroup;
+
+            // Clases de grupo prioritarias para border-radius
+            const groupClass = isSingle ? "is-single" : isFirstInGroup ? "is-first" : isLastInGroup ? "is-last" : isMiddleInGroup ? "is-middle" : "";
 
             return (
               <div
                 key={message.id}
                 id={`dm-msg-${message.id}`}
-                className={`ig-dm-bubble-row${mine ? " is-mine" : ""}`}
+                className={`ig-dm-bubble-row${mine ? " is-mine" : ""}${isLastInGroup ? " last-in-group" : ""}`}
               >
-                <article className={`ig-dm-bubble${mine ? " is-mine" : ""}`}>
-                  <p>{message.body}</p>
-                  <time>
-                    {formatMessageTime(message.createdAt)}
-                    {mine ? ` · ${deliveryLabel}` : ""}
-                  </time>
-                  {mine && message.deliveryState === "failed" ? (
-                    <button
-                      type="button"
-                      className="ig-dm-retry-btn"
-                      onClick={() => onRetryFailedMessage(message.id)}
+                {/* Avatar del otro usuario — solo en el último mensaje del grupo */}
+                {!mine ? (
+                  <div className="ig-dm-msg-avatar-wrap" aria-hidden="true">
+                    {isLastInGroup ? (
+                      <img
+                        src={selectedConversation.avatarUrl ?? AVATAR_FALLBACK_URL}
+                        alt=""
+                        className="ig-dm-msg-avatar"
+                      />
+                    ) : null}
+                  </div>
+                ) : null}
+
+                <div className={`ig-dm-bubble-wrapper${mine ? " is-mine" : ""}`}>
+                  <article className={`ig-dm-bubble ${groupClass} ${mine ? "is-mine" : ""}${message.deliveryState === "sending" ? " is-sending" : ""}`}>
+                    <p>{message.body}</p>
+                    {mine && message.deliveryState === "failed" ? (
+                      <button
+                        type="button"
+                        className="ig-dm-retry-btn"
+                        onClick={() => onRetryFailedMessage(message.id)}
+                      >
+                        Reintentar
+                      </button>
+                    ) : null}
+                  </article>
+                  {mine && 
+                   messages[messages.length - 1]?.id === message.id && 
+                   peerSeenAt && 
+                   new Date(peerSeenAt).getTime() >= new Date(message.createdAt).getTime() && (
+                    <span 
+                      className="x1lliihq x1plvlek xryxfnj x1n2onr6 xyejjpt x15dsfln x193iq5w xeuugli x1fj9vlw x13faqbe x1vvkbs x1s928wv xhkezso x1gmr53x x1cpjm7i x1fgarty x1943h6x x1i0vuye x1fhwpqd xo1l8bm x1roi4f4 x1s3etm8 x676frb x10wh9bi xpm28yp x8viiok x1o7cslx ig-dm-seen-status" 
+                      dir="auto"
                     >
-                      Reintentar
-                    </button>
-                  ) : null}
-                </article>
+                      {formatSeenTime(peerSeenAt)}
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })

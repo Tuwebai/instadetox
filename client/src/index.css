@@ -2348,50 +2348,34 @@
   font-weight: 700;
 }
 
-.ig-dm-requests-link {
-  border: 0;
-  background: transparent;
-  color: #cbd5e1;
-  font-size: 14px;
-  line-height: 18px;
-  font-weight: 600;
-}
-
-.ig-dm-inbox-tabs {
+.ig-dm-sidebar-list-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 16px 10px;
+  justify-content: space-between;
+  padding: 12px 20px 10px; /* Aumentado para separar del primer chat */
+  min-height: 44px;
 }
 
-.ig-dm-inbox-tab {
-  border: 0;
-  background: transparent;
-  color: #94a3b8;
-  font-size: 13px;
-  line-height: 18px;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0;
-}
-
-.ig-dm-inbox-tab.is-active {
-  color: #f8fafc;
-}
-
-.ig-dm-tab-badge {
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: #ef4444;
-  color: #fff;
-  font-size: 11px;
-  line-height: 18px;
+.ig-dm-sidebar-h1 {
+  font-size: 16px;
   font-weight: 700;
-  text-align: center;
+  color: #f8fafc;
+  margin: 0;
+  line-height: 20px;
+}
+
+.ig-dm-requests-link {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0095f6;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.ig-dm-requests-link:hover {
+  opacity: 0.8;
 }
 
 .ig-dm-conversations {
@@ -2604,40 +2588,103 @@
 
 .ig-dm-bubble-row {
   display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-bottom: 8px; /* Espaciado por defecto entre grupos */
 }
 
 .ig-dm-bubble-row.is-mine {
   justify-content: flex-end;
 }
 
-.ig-dm-bubble {
-  max-width: min(72%, 540px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  background: rgba(15, 23, 42, 0.66);
-  border-radius: 18px;
-  padding: 10px 12px;
+.ig-dm-bubble-wrapper {
+  display: flex;
+  flex-direction: column;
+  max-width: min(72%, 480px);
 }
 
+.ig-dm-bubble-wrapper.is-mine {
+  align-items: flex-end;
+}
+
+/* Espaciado compacto dentro de un grupo */
+.ig-dm-bubble-row:not(.last-in-group) {
+  margin-bottom: 2px;
+}
+
+/* Avatar del remitente a la izquierda del bubble */
+.ig-dm-msg-avatar-wrap {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  align-self: flex-end;
+}
+
+.ig-dm-msg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.ig-dm-bubble {
+  width: fit-content;
+  max-width: 100%;
+  background: #303030;
+  border-radius: 18px;
+  border: none;
+  padding: 8px 12px;
+  position: relative;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.4;
+}
+
+/* --- Border Radii Dinámicos (Instagram Style) --- */
+
+/* Caso Único (Prioridad sobre ráfaga) */
+.ig-dm-bubble.is-single { border-radius: 18px !important; }
+
+/* OTROS (Gris) */
+.ig-dm-bubble:not(.is-mine).is-first { border-radius: 18px 18px 18px 4px; }
+.ig-dm-bubble:not(.is-mine).is-middle { border-radius: 4px 18px 18px 4px; }
+.ig-dm-bubble:not(.is-mine).is-last { border-radius: 4px 18px 18px 18px; }
+
+/* MÍOS (Azul) */
 .ig-dm-bubble.is-mine {
-  background: rgba(37, 99, 235, 0.35);
-  border-color: rgba(96, 165, 250, 0.35);
+  background: #0095f6;
+  margin-left: auto;
+}
+.ig-dm-bubble.is-mine.is-first { border-radius: 18px 18px 4px 18px; }
+.ig-dm-bubble.is-mine.is-middle { border-radius: 18px 4px 4px 18px; }
+.ig-dm-bubble.is-mine.is-last { border-radius: 18px 4px 18px 18px; }
+
+/* Estado enviando: opacidad reducida muy sutil */
+.ig-dm-bubble.is-sending {
+  opacity: 0.9;
+}
+
+.ig-dm-seen-status {
+  display: block;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  margin-top: 4px;
+  text-align: right;
+  width: 100%;
+  pointer-events: none;
+  user-select: none;
 }
 
 .ig-dm-bubble p {
   margin: 0;
-  color: #f8fafc;
+  color: #ffffff;
   font-size: 14px;
-  line-height: 20px;
+  line-height: 18px;
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
-.ig-dm-bubble time {
-  display: block;
-  margin-top: 4px;
-  color: #94a3b8;
-  font-size: 11px;
-  line-height: 14px;
-}
 
 .ig-dm-retry-btn {
   margin-top: 6px;

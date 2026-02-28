@@ -146,15 +146,29 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   const markConversationSeen = useCallback(
     async (conversationId: string) => {
       if (!supabase || !userId) return;
-      await supabase.from("conversation_reads").upsert(
+      
+      const now = new Date().toISOString();
+      // Persistencia
+      void supabase.from("conversation_reads").upsert(
         {
           conversation_id: conversationId,
           user_id: userId,
-          seen_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
+          seen_at: now,
+          updated_at: now,
         },
-        { onConflict: "conversation_id,user_id" },
+        { onConflict: "conversation_id,user_id" }
       );
+
+      // --- BROADCAST INSTANTÁNEO ---
+      // Solo emitir si el canal de la conversación activa está listo
+      if (typingChannelRef.current && typingChannelRef.current.state === "joined") {
+        void typingChannelRef.current.send({
+          type: "broadcast",
+          event: "seen",
+          payload: { userId, seenAt: now }
+        });
+      }
+
       setUnreadByConversation((prev) => ({ ...prev, [conversationId]: 0 }));
     },
     [userId],
@@ -678,99 +692,55 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       const trimmed = body.trim();
       if (!trimmed) return false;
 
-      const optimisticId = `optimistic-${Date.now()}`;
-      const optimisticCreatedAt = new Date().toISOString();
-      const optimisticMessage: InboxMessage = {
-        id: optimisticId,
+      const finalId = self.crypto.randomUUID();
+      const now = new Date().toISOString();
+      const message: InboxMessage = {
+        id: finalId,
         conversationId: selectedConversationId,
         senderId: userId,
         body: trimmed,
-        createdAt: optimisticCreatedAt,
-        deliveryState: "sending",
+        createdAt: now,
+        deliveryState: "sent", // Estado inmediato para UX fluida
       };
 
-      setMessages((prev) => [...prev, optimisticMessage]);
+      // 1. Actualización Local Instantánea
+      setMessages((prev) => [...prev, message]);
       messagesCacheRef.current[selectedConversationId] = [
         ...(messagesCacheRef.current[selectedConversationId] ?? []),
-        optimisticMessage,
+        message,
       ];
-      moveConversationToTopWithPreview(selectedConversationId, trimmed, optimisticCreatedAt);
+      moveConversationToTopWithPreview(selectedConversationId, trimmed, now);
 
-      const { data, error } = await supabase.from("messages").insert({
-        conversation_id: selectedConversationId,
-        sender_id: userId,
-        body: trimmed,
-      }).select("id, created_at").single();
-
-      if (error) {
-        const failedMessage: InboxMessage = { ...optimisticMessage, deliveryState: "failed" };
-        setMessages((prev) =>
-          prev.map((message) => (message.id === optimisticId ? failedMessage : message)),
-        );
-        messagesCacheRef.current[selectedConversationId] = (messagesCacheRef.current[selectedConversationId] ?? []).map(
-          (message) => (message.id === optimisticId ? failedMessage : message),
-        );
-        failedMessagesRef.current[selectedConversationId] = [
-          ...(failedMessagesRef.current[selectedConversationId] ?? []).filter((message) => message.id !== optimisticId),
-          failedMessage,
-        ];
-        return false;
+      // 2. BROADCAST PARALELO (0ms delay)
+      if (typingChannelRef.current && typingChannelRef.current.state === "joined") {
+        void typingChannelRef.current.send({
+          type: "broadcast",
+          event: "new_message",
+          payload: message
+        });
       }
 
-      const backendId = data.id;
-      const backendCreatedAt = data.created_at;
-
-      setMessages((prev) =>
-        prev.map((message) =>
-          message.id === optimisticId
-            ? { ...message, id: backendId, createdAt: backendCreatedAt, deliveryState: "sent" }
-            : message
-        )
-      );
-
-      messagesCacheRef.current[selectedConversationId] = (messagesCacheRef.current[selectedConversationId] ?? []).map((message) =>
-        message.id === optimisticId
-          ? { ...message, id: backendId, createdAt: backendCreatedAt, deliveryState: "sent" }
-          : message
-      );
-
-      await supabase
-        .from("conversations")
-        .update({ updated_at: backendCreatedAt })
-        .eq("id", selectedConversationId);
-
-      failedMessagesRef.current[selectedConversationId] = (failedMessagesRef.current[selectedConversationId] ?? []).filter(
-        (message) => message.id !== optimisticId,
-      );
-
-      // === BROADCAST ENTERPRISE: patrón Instagram/MQTT ===
-      // Consultar participantes de la conversación y emitir broadcast
-      // a inbox:userId de cada uno (excluyendo al remitente)
-      // Este canal es permanente en cada cliente, no depende de qué conv está abierta
-      const realMessage: InboxMessage = {
-        id: backendId,
-        conversationId: selectedConversationId,
-        senderId: userId,
-        body: trimmed,
-        createdAt: backendCreatedAt,
-        deliveryState: "sent",
-      };
+      // 3. Persistencia Silenciosa (Segundo plano)
       void (async () => {
-        const sc = supabase;
-        if (!sc) return;
-        const { data: parts } = await sc
-          .from("conversation_participants")
-          .select("user_id")
-          .eq("conversation_id", selectedConversationId);
-        const recipientIds = (parts ?? []).map((p: { user_id: string }) => p.user_id).filter((id) => id !== userId);
-        await Promise.all(
-          recipientIds.map((recipientId) => {
-            const ch = sc.channel(`inbox:${recipientId}`);
-            return ch
-              .send({ type: "broadcast", event: "new_message", payload: realMessage })
-              .finally(() => sc.removeChannel(ch));
-          })
-        );
+        const { error } = await supabase.from("messages").insert({
+          id: finalId,
+          conversation_id: selectedConversationId,
+          sender_id: userId,
+          body: trimmed,
+          created_at: now
+        });
+
+        if (error) {
+          console.error("Error persistencia mensaje:", error);
+          setMessages((prev) =>
+            prev.map((m) => (m.id === finalId ? { ...m, deliveryState: "failed" } : m)),
+          );
+        } else {
+          void supabase
+            .from("conversations")
+            .update({ updated_at: now })
+            .eq("id", selectedConversationId);
+        }
       })();
 
       return true;
@@ -831,6 +801,124 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   }, [loadSeenByCount, messages, selectedConversationId, userId]);
 
   useEffect(() => {
+    if (!supabase || !userId) return;
+
+    const client = supabase;
+    // CANAL GLOBAL: PERSISTENTE DURANTE TODA LA SESIÓN
+    // Recibe mensajes de CUALQUIER conversación
+    const globalChannel = client.channel(`inbox:${userId}`);
+
+    globalChannel.on("broadcast", { event: "new_message" }, ({ payload }) => {
+      const msg = payload as InboxMessage | null;
+      if (!msg || !msg.id || !msg.conversationId) return;
+
+      moveConversationToTopWithPreview(msg.conversationId, msg.body, msg.createdAt);
+
+      if (selectedConversationIdRef.current === msg.conversationId) {
+        void markConversationSeen(msg.conversationId);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          const next = [...prev, msg].sort(
+            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+          );
+          messagesCacheRef.current[msg.conversationId] = next;
+          return next;
+        });
+      } else {
+        setUnreadByConversation((prev) => ({
+          ...prev,
+          [msg.conversationId]: (prev[msg.conversationId] ?? 0) + 1,
+        }));
+      }
+    });
+
+    globalChannel.subscribe();
+
+    const handleMessageEvent = (payload: RealtimePostgresChangesPayload<MessageRow>) => {
+      const isInsert = payload.eventType === "INSERT";
+      const row = isInsert ? payload.new : payload.old;
+      const rawConversationId = row?.conversation_id;
+      const rawSenderId = row?.sender_id;
+
+      if (typeof rawConversationId !== "string") return;
+      const currentConversationId = selectedConversationIdRef.current;
+
+      if (isInsert) {
+        const msg: InboxMessage = {
+          id: row.id!,
+          conversationId: rawConversationId,
+          senderId: rawSenderId!,
+          body: row.body!,
+          createdAt: row.created_at!,
+          deliveryState: "sent"
+        };
+
+        moveConversationToTopWithPreview(msg.conversationId, msg.body, msg.createdAt);
+
+        if (currentConversationId === msg.conversationId) {
+          if (msg.senderId !== userId) {
+            void markConversationSeen(msg.conversationId);
+          }
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev;
+            const next = [...prev, msg].sort(
+              (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            );
+            messagesCacheRef.current[msg.conversationId] = next;
+            return next;
+          });
+        } else if (msg.senderId !== userId) {
+          setUnreadByConversation((prev) => ({
+            ...prev,
+            [msg.conversationId]: (prev[msg.conversationId] ?? 0) + 1,
+          }));
+        }
+      } else {
+        // DELETE o UPDATE
+        void loadConversations({ silent: true });
+        if (currentConversationId === rawConversationId) {
+          void loadMessages(rawConversationId, { silent: true });
+        }
+      }
+    };
+
+    globalChannel.on("postgres_changes", { event: "*", schema: "public", table: "messages" }, handleMessageEvent);
+    globalChannel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "conversation_participants", filter: `user_id=eq.${userId}` },
+      () => { void loadConversations({ silent: true }); },
+    );
+    globalChannel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "conversations" },
+      () => { void loadConversations({ silent: true }); },
+    );
+    globalChannel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "conversation_reads" },
+      (payload) => {
+        const row = payload.eventType === "DELETE" ? payload.old : payload.new;
+        const rawConversationId = row?.conversation_id;
+        if (typeof rawConversationId !== "string") return;
+        const currentConversationId = selectedConversationIdRef.current;
+        if (currentConversationId === rawConversationId) {
+          void loadPeerSeenAt(rawConversationId);
+          // Actualizar contador "Visto por n"
+          const currentMessages = messagesCacheRef.current[rawConversationId] ?? [];
+          const latestOwnSentAt = [...currentMessages]
+            .reverse()
+            .find((m) => m.senderId === userId && m.deliveryState === "sent")?.createdAt ?? null;
+          void loadSeenByCount(rawConversationId, latestOwnSentAt);
+        }
+      },
+    );
+
+    return () => {
+      void client.removeChannel(globalChannel);
+    };
+  }, [loadConversations, loadMessages, loadPeerSeenAt, markConversationSeen, moveConversationToTopWithPreview, userId]);
+
+  useEffect(() => {
     if (!supabase || !selectedConversationId || !userId) return;
     const client = supabase;
 
@@ -839,7 +927,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       typingChannelRef.current = null;
     }
 
-    const channel = client.channel(`typing:${selectedConversationId}`);
+    const channel = client.channel(`conversation:${selectedConversationId}`);
     typingChannelRef.current = channel;
 
     channel.on("broadcast", { event: "typing" }, ({ payload }) => {
@@ -853,168 +941,47 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       }, 2400);
     });
 
-    // Listener de mensajes nuevos via Broadcast (patrón Instagram/MQTT)
-    // Evita que RLS en postgres_changes bloquee la entrega entre usuarios
+    channel.on("broadcast", { event: "seen" }, ({ payload }) => {
+      const { userId: peerId, seenAt } = payload || {};
+      if (!peerId || peerId === userId || !seenAt) return;
+      
+      setPeerSeenAtByConversation(prev => ({
+        ...prev,
+        [selectedConversationId]: seenAt
+      }));
+    });
+
+    // 3. Evento Mensaje Nuevo (Entrega 0ms si el chat está abierto)
     channel.on("broadcast", { event: "new_message" }, ({ payload }) => {
       const msg = payload as InboxMessage | null;
       if (!msg || !msg.id || !msg.conversationId) return;
-      // Ignorar si es nuestro propio mensaje (ya en el estado via optimistic)
       if (msg.senderId === userId) return;
 
       // Actualizar el preview del sidebar
       moveConversationToTopWithPreview(msg.conversationId, msg.body, msg.createdAt);
 
       // Si la conversación está abierta, agregar el mensaje al hilo
-      if (selectedConversationIdRef.current === msg.conversationId) {
-        void markConversationSeen(msg.conversationId);
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === msg.id)) return prev;
-          const next = [...prev, msg].sort(
-            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          );
-          messagesCacheRef.current[msg.conversationId] = next;
-          return next;
-        });
-      } else {
-        // En otra conversación: actualizar badge de no leídos
-        setUnreadByConversation((prev) => ({
-          ...prev,
-          [msg.conversationId]: (prev[msg.conversationId] ?? 0) + 1,
-        }));
-      }
-    });
-
-    channel.subscribe();
-    return () => {
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current);
-        typingTimeoutRef.current = null;
-      }
-      setPeerTyping(false);
-      void client.removeChannel(channel);
-      if (typingChannelRef.current === channel) {
-        typingChannelRef.current = null;
-      }
-    };
-  }, [selectedConversationId, userId]);
-
-  const notifyTyping = useCallback(
-    (isTyping: boolean) => {
-      if (!typingChannelRef.current || !userId) return;
-      const now = Date.now();
-      if (isTyping && now - lastTypingSentAtRef.current < 800) return;
-      lastTypingSentAtRef.current = now;
-      void typingChannelRef.current.send({
-        type: "broadcast",
-        event: "typing",
-        payload: { senderId: userId, isTyping },
-      });
-    },
-    [userId],
-  );
-
-  useEffect(() => {
-    if (!supabase || !userId) return;
-
-    const client = supabase;
-    // Canal estable por userId — persistente durante toda la sesión del usuario
-    // Recibe mensajes de CUALQUIER conversación, sin depender de cuál esté abierta
-    const channel = client.channel(`inbox:${userId}`);
-
-    // --- Broadcast: recepción de mensajes nuevos (patrón Instagram/MQTT) ---
-    // El sender emite a inbox:${recipientId} después del INSERT exitoso
-    channel.on("broadcast", { event: "new_message" }, ({ payload }) => {
-      const msg = payload as InboxMessage | null;
-      if (!msg || !msg.id || !msg.conversationId) return;
-
-      // Actualizar preview del sidebar SIEMPRE
-      moveConversationToTopWithPreview(msg.conversationId, msg.body, msg.createdAt);
-
-      const currentConversationId = selectedConversationIdRef.current;
-      if (currentConversationId === msg.conversationId) {
-        // Conversación abierta: insertar en hilo y marcar como leído
-        void markConversationSeen(msg.conversationId);
-        setMessages((prev) => {
-          if (prev.some((m) => m.id === msg.id)) return prev;
-          const next = [...prev, msg].sort(
-            (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
-          );
-          messagesCacheRef.current[msg.conversationId] = next;
-          return next;
-        });
-      } else {
-        // Otra conversación: incrementar badge de no leídos
-        setUnreadByConversation((prev) => ({
-          ...prev,
-          [msg.conversationId]: (prev[msg.conversationId] ?? 0) + 1,
-        }));
-      }
-    });
-
-    // --- postgres_changes: fallback para sincronización del sidebar ---
-    // (cambios en participantes, actualizaciones de conversación, visto)
-    const handleMessageEvent = (payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
-      const row = payload.eventType === "DELETE" ? payload.old : payload.new;
-      const rawConversationId = row?.conversation_id;
-      if (typeof rawConversationId !== "string") return;
-      const rawSenderId = row?.sender_id;
-      const currentConversationId = selectedConversationIdRef.current;
-
-      // Solo manejar si el mensaje es del propio usuario (propio = no recibiremos broadcast de nosotros mismos)
-      // Para mensajes de otros, el broadcast são encarga
-      if (payload.eventType === "INSERT" && typeof rawSenderId === "string" && rawSenderId === userId) {
-        // Propio mensaje: solo mover al top (el estado optimista ya lo tiene)
-        moveConversationToTopWithPreview(
-          rawConversationId,
-          (row.body as string) ?? "",
-          (row.created_at as string) ?? new Date().toISOString()
+      void markConversationSeen(msg.conversationId);
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        const next = [...prev, msg].sort(
+          (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
         );
-      } else if (payload.eventType !== "INSERT") {
-        void loadConversations({ silent: true });
-        if (currentConversationId === rawConversationId) {
-          void loadMessages(rawConversationId, { silent: true });
-        }
+        messagesCacheRef.current[msg.conversationId] = next;
+        return next;
+      });
+    });
+
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        void markConversationSeen(selectedConversationId);
       }
-    };
+    });
 
-    channel.on("postgres_changes", { event: "*", schema: "public", table: "messages" }, handleMessageEvent);
-    channel.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "conversation_participants", filter: `user_id=eq.${userId}` },
-      () => { void loadConversations({ silent: true }); },
-    );
-    channel.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "conversations" },
-      () => { void loadConversations({ silent: true }); },
-    );
-    channel.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "conversation_reads" },
-      (payload) => {
-        const row = payload.eventType === "DELETE" ? payload.old : payload.new;
-        const rawConversationId = row?.conversation_id;
-        if (typeof rawConversationId !== "string") return;
-        const currentConversationId = selectedConversationIdRef.current;
-        if (currentConversationId === rawConversationId) {
-          void loadPeerSeenAt(rawConversationId);
-          const selectedMessages = messagesCacheRef.current[rawConversationId] ?? [];
-          const latestOwnSentAt =
-            [...selectedMessages]
-              .reverse()
-              .find((message) => message.senderId === userId && message.deliveryState === "sent")?.createdAt ?? null;
-          void loadSeenByCount(rawConversationId, latestOwnSentAt);
-        }
-      },
-    );
-
-    channel.subscribe();
     return () => {
       void client.removeChannel(channel);
     };
-  // selectedConversationId NO va en las deps — se lee via ref para evitar recrear el canal
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [conversations, loadConversations, loadMessages, loadPeerSeenAt, loadSeenByCount, loadUnreadCounts, markConversationSeen, moveConversationToTopWithPreview, userId]);
+  }, [markConversationSeen, selectedConversationId, userId]);
 
   useEffect(() => {
     const onResume = () => {
@@ -1042,6 +1009,21 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedConversationId) ?? null,
     [conversations, selectedConversationId],
+  );
+
+  const notifyTyping = useCallback(
+    (isTyping: boolean) => {
+      if (!typingChannelRef.current || !userId || typingChannelRef.current.state !== "joined") return;
+      const now = Date.now();
+      if (isTyping && now - lastTypingSentAtRef.current < 800) return;
+      lastTypingSentAtRef.current = now;
+      void typingChannelRef.current.send({
+        type: "broadcast",
+        event: "typing",
+        payload: { senderId: userId, isTyping },
+      });
+    },
+    [userId],
   );
 
   return {

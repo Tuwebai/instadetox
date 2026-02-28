@@ -10,7 +10,7 @@ const Messages = () => {
   const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
-  const [inboxTab, setInboxTab] = useState<"primary" | "general" | "requests">("primary");
+  const [inboxTab, setInboxTab] = useState<"primary" | "requests">("primary");
   const [newChatOpen, setNewChatOpen] = useState(false);
   const username = user?.username ?? "usuario";
 
