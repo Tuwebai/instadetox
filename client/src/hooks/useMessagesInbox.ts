@@ -28,7 +28,7 @@ interface MessageRow {
   sender_id: string;
   body: string;
   created_at: string;
-  payload?: { replyTo?: ReplyToPayload } | null;
+  payload?: { replyTo?: ReplyToPayload; mediaUrl?: string | null } | null;
 }
 
 export interface InboxConversation {
@@ -51,6 +51,8 @@ export interface InboxMessage {
   deliveryState: "sending" | "sent" | "failed";
   /** Presente si el mensaje es una respuesta a otro */
   replyTo?: ReplyToPayload;
+  /** URL de archivos adjuntos */
+  mediaUrl?: string | null;
 }
 
 interface UseMessagesInboxParams {
@@ -165,12 +167,18 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     }
   }, [userId]);
 
-  // Efecto persistencia cache mensajes
-  useEffect(() => {
+  // Efecto persistencia cache mensajes - ACTUALIZADO para guardar inmediatamente
+  const persistMessagesCache = useCallback(() => {
     if (typeof window !== "undefined" && userId) {
       localStorage.setItem(`ig_messages_cache_${userId}`, JSON.stringify(messagesCacheRef.current));
     }
-  }, [userId, messages]); // Guardar cada vez que el hilo activo cambie
+  }, [userId]);
+  
+  // Guardar cuando cambie el estado de mensajes activos
+  useEffect(() => {
+    persistMessagesCache();
+  }, [userId, messages, persistMessagesCache]);
+  
   const failedMessagesRef = useRef<Record<string, InboxMessage[]>>({});
   const typingChannelRef = useRef<ReturnType<NonNullable<typeof supabase>["channel"]> | null>(null);
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -386,7 +394,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
 
       const { data: recentRows } = await supabase
         .from("messages")
-        .select("id, conversation_id, sender_id, body, created_at")
+        .select("id, conversation_id, sender_id, body, media_url, created_at")
         .in("conversation_id", conversationIds)
         .order("created_at", { ascending: false })
         .limit(500);
@@ -413,7 +421,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         return {
           ...row,
           title: resolvedTitle,
-          preview: latest?.body ?? null,
+          preview: latest?.body ? latest.body : (latest?.payload?.mediaUrl ? "Foto 📷" : null),
           previewAt: latest?.created_at ?? null,
           avatarUrl: directCounterpart?.avatar_url ?? null,
           username: directCounterpart?.username ?? null,
@@ -533,7 +541,9 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   // --- LÓGICA DE ACTUALIZACIÓN UNIVERSAL (SIDEBAR + THREAD) ---
   const handleInboundMessage = useCallback((msg: InboxMessage) => {
     // 1. Actualización inmediata del preview del Sidebar (0ms feel)
-    moveConversationToTopWithPreview(msg.conversationId, msg.body, msg.createdAt);
+    // Si hay multimedia, mostrar "Enviaste una foto" independientemente del texto
+    const previewText = msg.mediaUrl ? "Enviaste una foto" : msg.body?.trim();
+    moveConversationToTopWithPreview(msg.conversationId, previewText, msg.createdAt);
 
     // 2. Si el chat está abierto, hidratar el hilo
     if (selectedConversationIdRef.current === msg.conversationId) {
@@ -751,7 +761,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         await sleep(150 * (attempt + 1));
       }
 
-      const nextMessages = data.map((row) => ({
+      const dbMessages = data.map((row) => ({
         id: row.id,
         conversationId: row.conversation_id,
         senderId: row.sender_id,
@@ -759,16 +769,33 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         createdAt: row.created_at,
         deliveryState: "sent" as const,
         replyTo: row.payload?.replyTo ?? undefined,
+        mediaUrl: row.payload?.mediaUrl ?? null,
       }));
 
-      const failedMessages = failedMessagesRef.current[conversation_id] ?? [];
-      const merged = [...nextMessages, ...failedMessages].sort(
+      // Fusionar mensajes de DB con mensajes locales pendientes
+      // Los mensajes locales (sending/sent) que no estén en la DB deben preservarse
+      const currentCache = messagesCacheRef.current[conversation_id] ?? [];
+      const localMessages = currentCache.filter(
+        (m) => m.senderId === userId && m.deliveryState !== "failed"
+      );
+      
+      // Crear mapa de mensajes de DB por ID para evitar duplicados
+      const dbMessageIds = new Set(dbMessages.map((m) => m.id));
+      
+      // Filtrar mensajes locales que NO estén ya en la DB (evitar duplicados)
+      const pendingLocalMessages = localMessages.filter(
+        (m) => !dbMessageIds.has(m.id)
+      );
+      
+      // Combinar: DB messages + pending local messages
+      const merged = [...dbMessages, ...pendingLocalMessages].sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
       );
 
       messagesCacheRef.current[conversation_id] = merged;
+      persistMessagesCache(); // Guardar inmediatamente
       setMessages(merged);
-      setHasMoreMessages(nextMessages.length >= PAGE_SIZE);
+      setHasMoreMessages(dbMessages.length >= PAGE_SIZE);
 
       // --- FALLBACK DE VISTO (Mobile Stability) ---
       void loadPeerSeenAt(conversation_id);
@@ -798,7 +825,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     try {
       const { data } = await supabase
         .from("messages")
-        .select("id, conversation_id, sender_id, body, created_at")
+        .select("id, conversation_id, sender_id, body, created_at, payload")
         .eq("conversation_id", selectedConversationId)
         .lt("created_at", oldest.createdAt)
         .order("created_at", { ascending: false })
@@ -812,6 +839,8 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
           body: row.body,
           createdAt: row.created_at,
           deliveryState: "sent" as const,
+          replyTo: row.payload?.replyTo ?? undefined,
+          mediaUrl: row.payload?.mediaUrl ?? null,
         }))
         .reverse();
 
@@ -825,13 +854,14 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   }, [hasMoreMessages, loadingOlderMessages, messages, selectedConversationId]);
 
   const sendMessage = useCallback(
-    async (body: string, replyTo?: ReplyToPayload) => {
+    async (body: string, replyTo?: ReplyToPayload, pendingFiles?: Array<{ file: File; previewUrl: string }>) => {
       if (!supabase || !userId || !selectedConversationId) return false;
       const trimmed = body.trim();
-      if (!trimmed) return false;
+      if (!trimmed && (!pendingFiles || pendingFiles.length === 0)) return false;
 
       const finalId = generateUUID();
       const now = new Date().toISOString();
+      
       const message: InboxMessage = {
         id: finalId,
         conversationId: selectedConversationId,
@@ -840,46 +870,84 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         createdAt: now,
         deliveryState: "sending", // Estado inicial de envío (0ms UX)
         replyTo,
+        mediaUrl: pendingFiles && pendingFiles.length > 0 ? pendingFiles[0].previewUrl : null,
       };
 
       // 1. Actualización Local Instantánea (0ms)
       setMessages((prev) => [...prev, message]);
       const currentHilo = messagesCacheRef.current[selectedConversationId] ?? [];
       messagesCacheRef.current[selectedConversationId] = [...currentHilo, message];
-      moveConversationToTopWithPreview(selectedConversationId, trimmed, now);
+      persistMessagesCache(); // Guardar inmediatamente en localStorage
+      // Si hay multimedia, mostrar "Enviaste una foto" independientemente del texto
+      const previewText = pendingFiles && pendingFiles.length > 0 ? "Enviaste una foto" : trimmed;
+      moveConversationToTopWithPreview(selectedConversationId, previewText, now);
 
-      // 2. BROADCAST MULTI-CANAL (Background)
-      const peers = (participantsByConversationRef.current[selectedConversationId] ?? [])
-        .filter(id => id !== userId);
-
-      const broadcastMessage = {
-        type: "broadcast",
-        event: "new_message",
-        payload: { ...message, deliveryState: "sent" } // Los demás lo reciben como 'sent'
-      } as const;
-
-      // A la conversación activa
-      if (typingChannelRef.current && typingChannelRef.current.state === "joined") {
-        void typingChannelRef.current.send(broadcastMessage);
-      }
-
-      // A los Inbox de los peers (Realtime Sidebar Everywhere)
-      peers.forEach(peerId => {
-        if (!supabase) return;
-        const peerInboxChannel = supabase.channel(`inbox:${peerId}`);
-        peerInboxChannel.subscribe((status) => {
-          if (status === "SUBSCRIBED") {
-            void peerInboxChannel.send(broadcastMessage).then(() => {
-              if (supabase) void supabase.removeChannel(peerInboxChannel);
-            });
-          }
-        });
-      });
-
-      // 3. Persistencia en Segundo Plano (Silenciosa)
+      // 3. Persistencia y Broadcast en Segundo Plano
       void (async () => {
         if (!supabase) return;
-        const dbPayload = replyTo ? { replyTo } : undefined;
+        
+        let uploadedUrl: string | null = null;
+
+        // A. Subida de multimedia si existe
+        if (pendingFiles && pendingFiles.length > 0) {
+          try {
+            const fileToUpload = pendingFiles[0].file;
+            const fileExt = fileToUpload.name.split('.').pop();
+            const fileName = `${userId}/${selectedConversationId}/${generateUUID()}.${fileExt}`;
+            const filePath = `chat/${fileName}`;
+
+            const { data: uploadData, error: uploadError } = await supabase.storage
+              .from('chat_media')
+              .upload(filePath, fileToUpload);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+              .from('chat_media')
+              .getPublicUrl(filePath);
+            
+            uploadedUrl = publicUrl;
+          } catch (storageError) {
+            console.error("Error subiendo multimedia:", storageError);
+            const markFailed = (prev: InboxMessage[]) => 
+              prev.map(m => m.id === finalId ? { ...m, deliveryState: "failed" as const } : m);
+            setMessages(markFailed);
+            return;
+          }
+        }
+
+        // B. BROADCAST MULTI-CANAL (Después de la subida para tener la URL pública)
+        const peers = (participantsByConversationRef.current[selectedConversationId] ?? [])
+          .filter(id => id !== userId);
+
+        const broadcastMessage = {
+          type: "broadcast",
+          event: "new_message",
+          payload: { ...message, mediaUrl: uploadedUrl, deliveryState: "sent" } 
+        } as const;
+
+        // A la conversación activa
+        if (typingChannelRef.current && typingChannelRef.current.state === "joined") {
+          void typingChannelRef.current.send(broadcastMessage);
+        }
+
+        // A los Inbox de los peers
+        peers.forEach(peerId => {
+          if (!supabase) return;
+          const peerInboxChannel = supabase.channel(`inbox:${peerId}`);
+          peerInboxChannel.subscribe((status) => {
+            if (status === "SUBSCRIBED") {
+              void peerInboxChannel.send(broadcastMessage).then(() => {
+                if (supabase) void supabase.removeChannel(peerInboxChannel);
+              });
+            }
+          });
+        });
+
+        const dbPayload = {
+          ...(replyTo ? { replyTo } : {}),
+          ...(uploadedUrl ? { mediaUrl: uploadedUrl } : {})
+        };
         try {
           const { error } = await supabase.from("messages").insert({
             id: finalId,
@@ -887,18 +955,18 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
             sender_id: userId,
             body: trimmed,
             created_at: now,
-            ...(dbPayload ? { payload: dbPayload } : {}),
+            ...(Object.keys(dbPayload).length > 0 ? { payload: dbPayload } : {}),
           });
 
           if (error) throw error;
 
-          // Éxito: Actualizar a "sent" en estado y cache
           const markSent = (prev: InboxMessage[]) => 
-            prev.map(m => m.id === finalId ? { ...m, deliveryState: "sent" as const } : m);
+            prev.map(m => m.id === finalId ? { ...m, deliveryState: "sent" as const, mediaUrl: uploadedUrl } : m);
           
           setMessages(markSent);
           if (messagesCacheRef.current[selectedConversationId]) {
             messagesCacheRef.current[selectedConversationId] = markSent(messagesCacheRef.current[selectedConversationId]);
+            persistMessagesCache(); // Guardar inmediatamente
           }
 
           void supabase.from("conversations").update({ updated_at: now }).eq("id", selectedConversationId);
@@ -1045,7 +1113,8 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
           senderId: row.sender_id!,
           body: row.body!,
           createdAt: row.created_at!,
-          deliveryState: "sent"
+          deliveryState: "sent",
+          mediaUrl: row.payload?.mediaUrl ?? null
         };
         handleInboundMessage(msg);
       } else {
@@ -1143,7 +1212,9 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       if (msg.senderId === userId) return;
 
       // Actualizar el preview del sidebar
-      moveConversationToTopWithPreview(msg.conversationId, msg.body, msg.createdAt);
+      // Si hay multimedia, mostrar "Enviaste una foto" independientemente del texto
+      const previewText = msg.mediaUrl ? "Enviaste una foto" : msg.body?.trim();
+      moveConversationToTopWithPreview(msg.conversationId, previewText, msg.createdAt);
 
       // Si la conversación está abierta, agregar el mensaje al hilo
       void markConversationSeen(msg.conversationId);

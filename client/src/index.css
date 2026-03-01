@@ -1084,6 +1084,206 @@
     text-decoration: underline;
   }
 
+/* Estilos para multimedia en burbujas — REFORZADO */
+.ig-dm-bubble.has-media {
+  padding: 0;
+  max-width: 280px;
+  overflow: hidden;
+  display: block;
+  background: var(--ig-bubble-background, #262626);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+}
+
+/* Solo imagen: SIN BURBUJA - Estilo Instagram puro */
+.ig-dm-bubble.is-media-only {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  max-width: 280px;
+  /* Eliminar cualquier rastro de burbuja */
+  border-radius: 0 !important;
+}
+
+/* Eliminar completamente la burbuja base para media-only */
+.ig-dm-bubble.is-media-only,
+.ig-dm-bubble.is-media-one.is-mine,
+.ig-dm-bubble.is-media-only:not(.is-mine) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Borrar cualquier rastro de la burbuja base si es media-only */
+.ig-dm-bubble.is-media-only::before,
+.ig-dm-bubble.is-media-only::after {
+  display: none !important;
+  content: none !important;
+}
+
+/* Burbuja propia (Azul/Gris) con multimedia - pero NO para media-only */
+.ig-dm-bubble.is-mine.has-media:not(.is-media-only) {
+  background: #374151 !important;
+}
+
+.ig-dm-bubble-media {
+  width: 100%;
+  line-height: 0;
+  overflow: hidden;
+}
+
+.ig-dm-message-img {
+  width: 100%;
+  height: auto;
+  max-height: 450px; /* Aumentar para que se vean mejor */
+  display: block;
+  object-fit: contain; /* Mejor que cover para fotos de chat */
+  background: transparent;
+}
+
+/* Solo redondear imagen si es el único contenido */
+.ig-dm-bubble.has-media:not(:has(p)) .ig-dm-message-img {
+  border-radius: 22px;
+}
+
+/* Si hay texto, redondear solo arriba de la imagen y dar padding al texto */
+.ig-dm-bubble.has-media:has(p) .ig-dm-message-img {
+  border-radius: 22px 22px 0 0;
+}
+
+.ig-dm-bubble.has-media p {
+  padding: 10px 14px;
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #ffffff;
+}
+
+/* ============================================
+   LAYOUT ESPECIAL: TEXTO + IMAGEN (IG Style)
+   Misma burbuja, pero imagen sin fondo blanco
+   ============================================ */
+
+/* Cuando hay texto + imagen en la misma burbuja */
+.ig-dm-bubble.has-media-with-text {
+  /* Mantener estructura normal de burbuja */
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* La imagen va arriba y NO tiene fondo de burbuja */
+.ig-dm-bubble.has-media-with-text .ig-dm-bubble-media {
+  order: -1; /* Mover arriba */
+  background: transparent !important;
+  padding: 0;
+}
+
+/* Imagen sin bordes redondeados abajo (solo arriba) */
+.ig-dm-bubble.has-media-with-text .ig-dm-message-img {
+  border-radius: 22px 22px 0 0;
+  background: transparent !important;
+}
+
+/* El texto va abajo CON la burbuja normal */
+.ig-dm-bubble.has-media-with-text p {
+  padding: 10px 14px;
+  margin: 0;
+  background: inherit; /* Heredar fondo de burbuja */
+  border-radius: 0 0 22px 22px;
+}
+
+/* ============================================
+   LAYOUT SEPARADO: TEXTO (burbuja) + IMAGEN (sin burbuja)
+   Burbuja arriba, multimedia con botones abajo
+   ============================================ */
+
+/* Contenedor principal - columna vertical */
+.ig-dm-message-line.has-separated-media {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  gap: 4px !important;
+}
+
+.ig-dm-message-line.has-separated-media.is-mine {
+  align-items: flex-end !important;
+}
+
+/* Fila 2: Multimedia + Botones hover (horizontal) */
+.ig-dm-media-row-wrapper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Para mensajes propios: botones a la izquierda */
+.ig-dm-message-line.has-separated-media.is-mine .ig-dm-media-row-wrapper {
+  flex-direction: row-reverse;
+}
+
+/* Ocultar botones hover originales en layout separado */
+.ig-dm-message-line.has-separated-media > .ig-dm-hover-actions {
+  display: none !important;
+}
+
+/* Botones hover al lado de la multimedia */
+.ig-dm-media-row-wrapper .ig-dm-hover-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  position: static;
+  opacity: 1;
+}
+
+/* Multimedia sin burbuja */
+.ig-dm-separated-media {
+  max-width: 280px;
+  overflow: hidden;
+  border-radius: 22px;
+  line-height: 0;
+  background: transparent;
+}
+
+.ig-dm-separated-media-img {
+  width: 100%;
+  height: auto;
+  max-height: 450px;
+  display: block;
+  object-fit: contain;
+  background: transparent;
+  border-radius: 22px;
+}
+
+/* La burbuja del texto (arriba) - usa estilos normales */
+.ig-dm-message-line.has-separated-media .ig-dm-bubble {
+  /* Hereda estilos normales de .ig-dm-bubble */
+}
+
+/* La imagen separada (abajo) - sin burbuja */
+.ig-dm-separated-media {
+  max-width: 280px;
+  overflow: hidden;
+  border-radius: 22px;
+  line-height: 0;
+  background: transparent;
+}
+
+.ig-dm-separated-media-img {
+  width: 100%;
+  height: auto;
+  max-height: 450px;
+  display: block;
+  object-fit: contain;
+  background: transparent;
+  border-radius: 22px;
+}
+
   .inst-profile-link-row {
     margin-top: 4px;
     display: inline-flex;
@@ -2170,6 +2370,14 @@
   height: 100dvh;
   overflow: hidden;
   z-index: 0;
+  box-sizing: border-box;
+}
+
+@media (max-width: 767px) {
+  .ig-dm-page {
+    /* Altura de MobileBottomNav (h-16 = 64px) + safe area */
+    padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 @media (min-width: 768px) {
@@ -2889,6 +3097,86 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* --- MULTIMEDIA PREVIEW EN CHAT --- */
+.ig-dm-media-preview-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  overflow-x: auto;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  scrollbar-width: none; /* Firefox */
+}
+
+.ig-dm-media-preview-container::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
+.ig-dm-media-item {
+  position: relative;
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--bg-glass);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ig-dm-media-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ig-dm-media-remove-btn {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 18px;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  cursor: pointer;
+  z-index: 2;
+  transition: background 0.2s;
+}
+
+.ig-dm-media-remove-btn:hover {
+  background: rgba(0, 0, 0, 0.8);
+}
+
+.ig-dm-media-add-more {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.ig-dm-media-add-more:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.ig-dm-reply-banner {
+  /* Ajuste para que el banner de respuesta no interfiera con el preview */
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 /* El username va bold y en color primario */

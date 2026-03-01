@@ -6,10 +6,16 @@ import MessagesThreadView from "@/components/messages/MessagesThreadView";
 import MessagesNewChatModal from "@/components/messages/MessagesNewChatModal";
 import { useMessagesInbox, type ReplyToPayload } from "@/hooks/useMessagesInbox";
 
+interface PendingFile {
+  file: File;
+  preview: string;
+}
+
 const Messages = () => {
   const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [draft, setDraft] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
   const [replyingTo, setReplyingTo] = useState<ReplyToPayload | null>(null);
   const [inboxTab, setInboxTab] = useState<"primary" | "requests">("primary");
   const [newChatOpen, setNewChatOpen] = useState(false);
@@ -84,13 +90,18 @@ const Messages = () => {
                 onSend={() => {
                   const current = draft;
                   const currentReply = replyingTo;
+                  const currentFiles = [...pendingFiles]; // Capturamos los archivos actuales
                   setDraft("");
                   setReplyingTo(null);
+                  setPendingFiles([]); // Limpiamos archivos pendientes
                   notifyTyping(false);
-                  void sendMessage(current, currentReply ?? undefined).then((success) => {
+                  
+                  // Pasamos los archivos al hook
+                  void sendMessage(current, currentReply ?? undefined, currentFiles.map(f => ({ file: f.file, previewUrl: f.preview }))).then((success) => {
                     if (!success) {
                       setDraft(current);
                       setReplyingTo(currentReply);
+                      setPendingFiles(currentFiles);
                       notifyTyping(current.trim().length > 0);
                     }
                   });
@@ -105,8 +116,24 @@ const Messages = () => {
                   void loadOlderMessages();
                 }}
                 replyingTo={replyingTo}
-                onReply={(msg) => setReplyingTo({ id: msg.id, body: msg.body, senderId: msg.senderId, username: selectedConversation.username ?? null })}
+              onReply={(msg) => setReplyingTo({ id: msg.id, body: msg.body, senderId: msg.senderId, username: selectedConversation.username ?? null })}
                 onCancelReply={() => setReplyingTo(null)}
+                pendingFiles={pendingFiles}
+                onFilesAdded={(files: FileList) => {
+                  const newFiles = Array.from(files).map((file) => ({
+                    file,
+                    preview: URL.createObjectURL(file),
+                  }));
+                  setPendingFiles((prev) => [...prev, ...newFiles]);
+                }}
+                onRemoveFile={(index: number) => {
+                  setPendingFiles((prev) => {
+                    const next = [...prev];
+                    URL.revokeObjectURL(next[index].preview);
+                    next.splice(index, 1);
+                    return next;
+                  });
+                }}
               />
             ) : loadingConversations ? null : (
               <MessagesEmptyState onStartMessage={() => setNewChatOpen(true)} />

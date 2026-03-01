@@ -25,6 +25,12 @@ interface MessagesThreadViewProps {
   onReply: (message: InboxMessage) => void;
   /** Callback para cancelar el reply activo */
   onCancelReply: () => void;
+  /** Archivos multimedia pendientes de enviar */
+  pendingFiles: Array<{ file: File; preview: string }>;
+  /** Callback para añadir archivos */
+  onFilesAdded: (files: FileList) => void;
+  /** Callback para remover un archivo */
+  onRemoveFile: (index: number) => void;
 }
 
 /** Fallback tipo Instagram cuando no hay avatar. */
@@ -70,6 +76,9 @@ const MessagesThreadView = ({
   replyingTo,
   onReply,
   onCancelReply,
+  pendingFiles,
+  onFilesAdded,
+  onRemoveFile,
 }: MessagesThreadViewProps) => {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomAnchorRef = useRef<HTMLDivElement>(null);
@@ -337,19 +346,102 @@ const MessagesThreadView = ({
                   ) : null}
 
                   {/* BURBUJA PRINCIPAL + HOVER ACTIONS */}
-                  <div className={`ig-dm-message-line${mine ? " is-mine" : ""}`}>
-                    <article className={`ig-dm-bubble ${groupClass} ${mine ? "is-mine" : ""}${message.deliveryState === "sending" ? " is-sending" : ""}${message.replyTo ? " has-reply" : ""}`}>
-                      <p>{message.body}</p>
-                      {mine && message.deliveryState === "failed" ? (
-                        <button
-                          type="button"
-                          className="ig-dm-retry-btn"
-                          onClick={() => onRetryFailedMessage(message.id)}
-                        >
-                          Reintentar
-                        </button>
-                      ) : null}
-                    </article>
+                  <div className={`ig-dm-message-line ${mine ? "is-mine" : ""} ${message.mediaUrl && message.body ? "has-separated-media" : ""}`}>
+                    {message.mediaUrl && message.body ? (
+                      /* Layout separado: Burbuja arriba, multimedia con botones abajo */
+                      <>
+                        {/* Fila 1: Burbuja con texto */}
+                        <article className={`ig-dm-bubble ${mine ? "is-mine" : ""} ${groupClass} ${message.deliveryState === "sending" ? "is-sending" : ""}`}>
+                          <p>{message.body}</p>
+                          {mine && message.deliveryState === "failed" ? (
+                            <button
+                              type="button"
+                              className="ig-dm-retry-btn"
+                              onClick={() => onRetryFailedMessage(message.id)}
+                            >
+                              Reintentar
+                            </button>
+                          ) : null}
+                        </article>
+                        {/* Fila 2: Multimedia + Botones hover */}
+                        <div className="ig-dm-media-row-wrapper">
+                          <div className="ig-dm-separated-media">
+                            <img
+                              src={message.mediaUrl}
+                              alt="Multimedia adjunta"
+                              className="ig-dm-separated-media-img"
+                              onLoad={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                if (target.complete) window.dispatchEvent(new Event('resize'));
+                              }}
+                            />
+                          </div>
+                          {/* BOTONES DE HOVER - al lado de la multimedia */}
+                          <div className="ig-dm-hover-actions">
+                            <button type="button" className="ig-dm-hover-btn" aria-label="Reaccionar">
+                              <svg aria-label="Reaccionar al mensaje" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
+                                <title>Reaccionar</title>
+                                <path d="M15.83 10.997a1.167 1.167 0 1 0 1.167 1.167 1.167 1.167 0 0 0-1.167-1.167Zm-6.5 1.167a1.167 1.167 0 1 0-1.166 1.167 1.167 1.167 0 0 0 1.166-1.167Zm5.163 3.24a3.406 3.406 0 0 1-4.982.007 1 1 0 1 0-1.557 1.256 5.397 5.397 0 0 0 8.09 0 1 1 0 0 0-1.55-1.263ZM12 .503a11.5 11.5 0 1 0 11.5 11.5A11.513 11.513 0 0 0 12 .503Zm0 21a9.5 9.5 0 1 1 9.5-9.5 9.51 9.51 0 0 1-9.5 9.5Z"></path>
+                              </svg>
+                            </button>
+                            <button type="button" className="ig-dm-hover-btn" aria-label="Responder"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onReply(message);
+                              }}
+                            >
+                              <svg aria-label="Responder mensaje" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
+                                <title>Responder</title>
+                                <path d="M14 8.999H4.413l5.294-5.292a1 1 0 1 0-1.414-1.414l-7 6.998c-.014.014-.019.033-.032.048A.933.933 0 0 0 1 9.998V10c0 .027.013.05.015.076a.907.907 0 0 0 .282.634l6.996 6.998a1 1 0 0 0 1.414-1.414L4.415 11H14a7.008 7.008 0 0 1 7 7v3.006a1 1 0 0 0 2 0V18a9.01 9.01 0 0 0-9-9Z"></path>
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              className="ig-dm-hover-btn"
+                              aria-label="Más"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuId(activeMenuId === message.id ? null : message.id);
+                              }}
+                            >
+                              <svg aria-label="Ver más opciones" fill="currentColor" height="16" role="img" viewBox="0 0 24 24" width="16">
+                                <title>Más</title>
+                                <circle cx="12" cy="12" r="1.5"></circle>
+                                <circle cx="12" cy="6" r="1.5"></circle>
+                                <circle cx="12" cy="18" r="1.5"></circle>
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      /* Layout normal: Todo dentro de la burbuja */
+                      <article className={`ig-dm-bubble ${mine ? "is-mine" : ""} ${message.mediaUrl ? "has-media" : ""} ${message.mediaUrl && !message.body ? "is-media-only" : ""} ${message.deliveryState === "sending" ? "is-sending" : ""} ${groupClass}`}>
+                        {message.mediaUrl && (
+                          <div className="ig-dm-bubble-media">
+                            <img
+                              src={message.mediaUrl}
+                              alt="Multimedia adjunta"
+                              className="ig-dm-message-img"
+                              onLoad={(e) => {
+                                const target = e.target as HTMLImageElement;
+                                if (target.complete) window.dispatchEvent(new Event('resize'));
+                              }}
+                            />
+                          </div>
+                        )}
+                        {message.body && <p>{message.body}</p>}
+                        {mine && message.deliveryState === "failed" ? (
+                          <button
+                            type="button"
+                            className="ig-dm-retry-btn"
+                            onClick={() => onRetryFailedMessage(message.id)}
+                          >
+                            Reintentar
+                          </button>
+                        ) : null}
+                      </article>
+                    )}
 
                     {/* BOTONES DE HOVER */}
                     <div className="ig-dm-hover-actions">
@@ -493,6 +585,47 @@ const MessagesThreadView = ({
       ) : null}
 
       <footer className="ig-dm-thread-composer">
+        {/* MEDIA PREVIEW AREA */}
+        {pendingFiles.length > 0 && (
+          <div className="ig-dm-media-preview-container">
+            {/* Botón de añadir más (estética Instagram) */}
+            <div className="ig-dm-media-add-more-wrapper">
+              <label htmlFor="ig-dm-media-upload-more" className="ig-dm-media-add-more" aria-label="Subir otra foto o video">
+                <svg aria-label="Subir otra foto o video" fill="currentColor" height="24" role="img" viewBox="0 0 24 24" width="24">
+                  <path d="M6.549 5.013A1.557 1.557 0 1 0 8.106 6.57a1.557 1.557 0 0 0-1.557-1.557Z" fillRule="evenodd"></path>
+                  <path d="m2 18.605 3.901-3.9a.908.908 0 0 1 1.284 0l2.807 2.806a.908.908 0 0 0 1.283 0l5.534-5.534a.908.908 0 0 1 1.283 0l3.905 3.905" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="2"></path>
+                  <path d="M18.44 2.004A3.56 3.56 0 0 1 22 5.564h0v12.873a3.56 3.56 0 0 1-3.56 3.56H5.568a3.56 3.56 0 0 1-3.56-3.56V5.563a3.56 3.56 0 0 1 3.56-3.56Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2"></path>
+                </svg>
+                <input
+                  id="ig-dm-media-upload-more"
+                  type="file"
+                  accept="audio/*,.mp4,.mov,.png,.jpg,.jpeg"
+                  multiple
+                  style={{ display: "none" }}
+                  onChange={(e) => e.target.files && onFilesAdded(e.target.files)}
+                />
+              </label>
+            </div>
+
+            {/* Lista de Previews */}
+            {pendingFiles.map((file, index) => (
+              <div key={file.preview} className="ig-dm-media-item">
+                <img src={file.preview} alt="adjunto" />
+                <button
+                  type="button"
+                  className="ig-dm-media-remove-btn"
+                  onClick={() => onRemoveFile(index)}
+                  aria-label="Eliminar archivo adjunto"
+                >
+                  <svg aria-label="Eliminar archivo adjunto" fill="currentColor" height="10" role="img" viewBox="0 0 24 24" width="10">
+                    <polyline fill="none" points="20.643 3.357 12 12 3.353 20.647" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3"></polyline>
+                    <line fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" x1="20.649" x2="3.354" y1="20.649" y2="3.354"></line>
+                  </svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* REPLY BANNER — encima del input, sin fondo, paridad IG */}
         {replyingTo ? (
@@ -557,7 +690,7 @@ const MessagesThreadView = ({
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  if (draft.trim().length > 0) {
+                  if (draft.trim().length > 0 || pendingFiles.length > 0) {
                     onSend();
                     const target = event.target as HTMLTextAreaElement;
                     setTimeout(() => { target.style.height = "auto"; }, 0);
@@ -566,8 +699,8 @@ const MessagesThreadView = ({
               }}
             />
           </div>
-          {draft.trim().length > 0 ? (
-            <button type="button" className="ig-dm-send-text-btn" onClick={onSend} disabled={!draft.trim()}>
+          {(draft.trim().length > 0 || (pendingFiles && pendingFiles.length > 0)) ? (
+            <button type="button" className="ig-dm-send-text-btn" onClick={onSend}>
               Enviar
             </button>
           ) : (
@@ -587,6 +720,7 @@ const MessagesThreadView = ({
                 multiple
                 type="file"
                 style={{ display: "none" }}
+                onChange={(e) => e.target.files && onFilesAdded(e.target.files)}
               />
               <label htmlFor="ig-dm-media-upload" className="ig-dm-icon-label" aria-label="Agregar foto o video">
                 <svg aria-label="Agregar foto o video" fill="currentColor" height="24" role="img" viewBox="0 0 24 24" width="24">
