@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { Virtuoso } from "react-virtuoso";
 import { useFeedPostRealtime } from "@/hooks/useFeedPostRealtime";
 import { setPostRouteSnapshot } from "@/lib/postRouteCache";
 import {
@@ -295,6 +296,7 @@ const Home = () => {
       .from("post_comments")
       .select("id, post_id, user_id, content, created_at")
       .eq("post_id", postId)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(20);
 
@@ -338,22 +340,11 @@ const Home = () => {
   }, [favoriteAuthorIds, feed, followingAuthorIds, hasMore, nextCursor, pendingAuthorIds, savedPostIds, user?.id]);
 
   useEffect(() => {
-    const node = loadMoreRef.current;
-    if (!node || !hasMore) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const first = entries[0];
-        if (first?.isIntersecting) {
-          void loadMore();
-        }
-      },
-      { rootMargin: "200px" },
-    );
-
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [hasMore, loadMore]);
+    // [Optimización react-virtuoso]
+    // Virtuoso manejará el IntersectionObserver nativamente a través del callback endReached.
+    // Mantenemos este effect obsoleto o vacío si algún componente legacy dependiese del ref,
+    // pero ya no disparamos observe() aquí para evitar doble fetching.
+  }, []);
 
   useEffect(() => {
     const onAvatarUpdated = (event: Event) => {
@@ -777,7 +768,7 @@ const Home = () => {
       return false;
     }
 
-    const { error } = await supabase.from("posts").delete().eq("id", postId).eq("user_id", user.id);
+    const { error } = await supabase.from("posts").update({ deleted_at: new Date().toISOString() }).eq("id", postId).eq("user_id", user.id);
     if (error) {
       toast({ title: "Error", description: "No se pudo eliminar la publicación." });
       return false;
@@ -1099,64 +1090,75 @@ const Home = () => {
             <p className="text-gray-300">Aun no hay publicaciones. Crea la primera desde la pestaña Crear.</p>
           </Glass>
         ) : (
-          visibleFeed.map((post) => {
-            const isOwnPost = Boolean(user?.id && user.id === post.user_id);
-            const isFollowingAuthor = followingAuthorIds.has(post.user_id);
-            const isPendingAuthor = pendingAuthorIds.has(post.user_id);
-            const effectiveContext =
-              post.feed_context ?? (isOwnPost ? "own" : isFollowingAuthor ? "following" : "suggested");
-            const contextLabel = feedMode === "ranked" && effectiveContext === "suggested" ? "Sugerencia para ti" : null;
+          <Virtuoso
+            useWindowScroll
+            data={visibleFeed}
+            overscan={800} // Carga unos 800px arriba/abajo previniendo flashes blancos en scroll rápido
+            endReached={() => {
+              if (hasMore && !loadingMore && !loadingFeed) {
+                void loadMore();
+              }
+            }}
+            itemContent={(_index, post) => {
+              const isOwnPost = Boolean(user?.id && user.id === post.user_id);
+              const isFollowingAuthor = followingAuthorIds.has(post.user_id);
+              const isPendingAuthor = pendingAuthorIds.has(post.user_id);
+              const effectiveContext =
+                post.feed_context ?? (isOwnPost ? "own" : isFollowingAuthor ? "following" : "suggested");
+              const contextLabel = feedMode === "ranked" && effectiveContext === "suggested" ? "Sugerencia para ti" : null;
 
-            const hasMedia = Boolean(post.media_url && post.media_url.trim().length > 0);
-            const CardComponent = hasMedia || post.type === "photo" || post.type === "video" ? FeedPostCard : FeedTextPostCard;
+              const hasMedia = Boolean(post.media_url && post.media_url.trim().length > 0);
+              const CardComponent = hasMedia || post.type === "photo" || post.type === "video" ? FeedPostCard : FeedTextPostCard;
 
-            return (
-              <CardComponent
-                key={post.id}
-                post={post}
-                currentUserId={user?.id}
-                contextLabel={contextLabel}
-                isFollowingAuthor={isFollowingAuthor}
-                isFollowPendingAuthor={isPendingAuthor}
-                isFavoriteAuthor={favoriteAuthorIds.has(post.user_id)}
-                followLoading={Boolean(followLoadingByUser[post.user_id])}
-                isSaved={savedPostIds.has(post.id)}
-                commentsOpen={Boolean(openComments[post.id])}
-                comments={commentsByPost[post.id] ?? []}
-                commentInput={commentInputs[post.id] ?? ""}
-                onToggleFollow={(authorId) => toggleFollowAuthor(authorId)}
-                onToggleLike={() => void toggleLike(post)}
-                onToggleSave={() => void toggleSavePost(post.id)}
-                onToggleComments={() => void handleToggleComments(post.id)}
-                onShare={() => void handleSharePost(post.id)}
-                onCommentInputChange={(value) =>
-                  setCommentInputs((prev) => ({
-                    ...prev,
-                    [post.id]: value,
-                  }))
-                }
-                onSubmitComment={() => void handleCommentSubmit(post.id)}
-                onOpenPost={() => openPostRoute(post)}
-                onWarmRoute={supportsHoverPrefetch ? () => warmPostRouteSnapshot(post) : undefined}
-                onWarmProfileRoute={supportsHoverPrefetch ? () => warmProfileRouteSnapshot(post.username) : undefined}
-                onDeletePost={handleDeletePost}
-                onReportPost={handleReportPost}
-                onToggleFavoriteAuthor={handleToggleFavoriteAuthor}
-                onToggleHideLikeCount={handleToggleHideLikeCount}
-                onToggleCommentsEnabled={handleToggleCommentsEnabled}
-                onEditPostCaption={handleEditPostCaption}
-              />
-            );
-          })
+              return (
+                <div key={post.id} className="pb-6">
+                  <CardComponent
+                    post={post}
+                    currentUserId={user?.id}
+                    contextLabel={contextLabel}
+                    isFollowingAuthor={isFollowingAuthor}
+                    isFollowPendingAuthor={isPendingAuthor}
+                    isFavoriteAuthor={favoriteAuthorIds.has(post.user_id)}
+                    followLoading={Boolean(followLoadingByUser[post.user_id])}
+                    isSaved={savedPostIds.has(post.id)}
+                    commentsOpen={Boolean(openComments[post.id])}
+                    comments={commentsByPost[post.id] ?? []}
+                    commentInput={commentInputs[post.id] ?? ""}
+                    onToggleFollow={(authorId) => toggleFollowAuthor(authorId)}
+                    onToggleLike={() => void toggleLike(post)}
+                    onToggleSave={() => void toggleSavePost(post.id)}
+                    onToggleComments={() => void handleToggleComments(post.id)}
+                    onShare={() => void handleSharePost(post.id)}
+                    onCommentInputChange={(value) =>
+                      setCommentInputs((prev) => ({
+                        ...prev,
+                        [post.id]: value,
+                      }))
+                    }
+                    onSubmitComment={() => void handleCommentSubmit(post.id)}
+                    onOpenPost={() => openPostRoute(post)}
+                    onWarmRoute={supportsHoverPrefetch ? () => warmPostRouteSnapshot(post) : undefined}
+                    onWarmProfileRoute={supportsHoverPrefetch ? () => warmProfileRouteSnapshot(post.username) : undefined}
+                    onDeletePost={handleDeletePost}
+                    onReportPost={handleReportPost}
+                    onToggleFavoriteAuthor={handleToggleFavoriteAuthor}
+                    onToggleHideLikeCount={handleToggleHideLikeCount}
+                    onToggleCommentsEnabled={handleToggleCommentsEnabled}
+                    onEditPostCaption={handleEditPostCaption}
+                  />
+                </div>
+              );
+            }}
+            components={{
+              Footer: () => (
+                <div className="py-2 text-center text-sm text-gray-300">
+                  {loadingMore ? "Cargando mas publicaciones..." : hasMore ? "Desliza para cargar mas" : "No hay mas contenido"}
+                  {loadingMore && renderFeedSkeleton("sk-more")}
+                </div>
+              )
+            }}
+          />
         )}
-
-        {feed.length > 0 ? (
-          <div ref={loadMoreRef} className="py-2 text-center text-sm text-gray-300">
-            {loadingMore ? "Cargando mas publicaciones..." : hasMore ? "Desliza para cargar mas" : "No hay mas contenido"}
-          </div>
-        ) : null}
-
-        {loadingMore ? renderFeedSkeleton("sk-more") : null}
       </div>
 
       <div className="hidden md:block md:w-1/4 lg:w-4/12">

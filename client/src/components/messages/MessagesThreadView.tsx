@@ -353,15 +353,22 @@ const MessagesThreadView = ({
                         {/* Fila 1: Burbuja con texto */}
                         <article className={`ig-dm-bubble ${mine ? "is-mine" : ""} ${groupClass} ${message.deliveryState === "sending" ? "is-sending" : ""}`}>
                           <p>{message.body}</p>
-                          {mine && message.deliveryState === "failed" ? (
-                            <button
-                              type="button"
-                              className="ig-dm-retry-btn"
-                              onClick={() => onRetryFailedMessage(message.id)}
-                            >
-                              Reintentar
-                            </button>
-                          ) : null}
+                          {mine && (
+                            <div className="ig-dm-message-status-container">
+                              {message.deliveryState === "sending" && (
+                                <span className="ig-dm-status-label is-sending">Enviando...</span>
+                              )}
+                              {message.deliveryState === "failed" && (
+                                <button
+                                  type="button"
+                                  className="ig-dm-retry-btn-v2"
+                                  onClick={() => onRetryFailedMessage(message.id)}
+                                >
+                                  Reintentar
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </article>
                         {/* Fila 2: Multimedia + Botones hover */}
                         <div className="ig-dm-media-row-wrapper">
@@ -431,15 +438,27 @@ const MessagesThreadView = ({
                           </div>
                         )}
                         {message.body && <p>{message.body}</p>}
-                        {mine && message.deliveryState === "failed" ? (
-                          <button
-                            type="button"
-                            className="ig-dm-retry-btn"
-                            onClick={() => onRetryFailedMessage(message.id)}
-                          >
-                            Reintentar
-                          </button>
-                        ) : null}
+                        
+                        {/* M12 Feedback de Estado */}
+                        {mine && (
+                          <div className="ig-dm-message-status-container">
+                            {message.deliveryState === "sending" && (
+                              <span className="ig-dm-status-label is-sending">Enviando...</span>
+                            )}
+                            {message.deliveryState === "failed" && (
+                              <div className="flex items-center gap-2">
+                                <span className="ig-dm-status-label is-failed">Fallo de red</span>
+                                <button
+                                  type="button"
+                                  className="ig-dm-retry-btn-v2"
+                                  onClick={() => onRetryFailedMessage(message.id)}
+                                >
+                                  Reintentar
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </article>
                     )}
 

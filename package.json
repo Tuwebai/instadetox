@@ -9,7 +9,8 @@
     "dev:backend": "npm --prefix server run dev",
     "build": "npm --prefix client run build && npm --prefix server run build",
     "start": "npm --prefix server run start",
-    "check": "npm --prefix client run check && npm --prefix server run check",
+    "check": "npm --prefix client run check && npm --prefix server run check && npm run test",
+    "test": "npm --prefix client run test",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
@@ -62,7 +63,9 @@
     "express-session": "^1.18.1",
     "framer-motion": "^11.18.2",
     "helmet": "^8.1.0",
+    "idb": "^8.0.3",
     "input-otp": "^1.2.4",
+    "lint": "^1.1.2",
     "lucide-react": "^0.453.0",
     "memorystore": "^1.6.7",
     "passport": "^0.7.0",
@@ -73,6 +76,7 @@
     "react-hook-form": "^7.53.1",
     "react-icons": "^5.4.0",
     "react-resizable-panels": "^2.1.4",
+    "react-virtuoso": "^4.18.1",
     "recharts": "^2.13.0",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
@@ -99,13 +103,19 @@
     "autoprefixer": "^10.4.20",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
-    "drizzle-kit": "^0.30.4",
+    "drizzle-kit": "^0.31.9",
     "esbuild": "^0.25.0",
+    "jsdom": "^28.1.0",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
     "tsx": "^4.19.1",
     "typescript": "5.6.3",
-    "vite": "^5.4.14"
+    "vite": "^5.4.14",
+    "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.0.18",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1"
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"

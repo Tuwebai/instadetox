@@ -271,7 +271,7 @@ export const useProfilePostModalActions = <TPost extends ProfilePostPatchable>({
     }
     patchPostAcrossTabs(modalPost.id, (post) => ({ ...post, comments_count: post.comments_count + 1 }));
 
-    let commentData: any = null;
+    let commentData: Record<string, unknown> | null = null;
     try {
       const response = await apiFetch(`/api/posts/${modalPost.id}/comment`, {
         method: "POST",
@@ -283,7 +283,7 @@ export const useProfilePostModalActions = <TPost extends ProfilePostPatchable>({
       });
       commentData = response?.data;
       if (!commentData) throw new Error("No data returned");
-    } catch (err: any) {
+    } catch (err: unknown) {
       setModalCommentsByPost((prev) => ({
         ...prev,
         [modalPost.id]: (prev[modalPost.id] ?? []).filter((comment) => comment.id !== clientCommentId),
@@ -295,7 +295,8 @@ export const useProfilePostModalActions = <TPost extends ProfilePostPatchable>({
         }));
       }
       patchPostAcrossTabs(modalPost.id, (post) => ({ ...post, comments_count: Math.max(0, post.comments_count - 1) }));
-      const message = String(err?.message ?? "").toLowerCase();
+      const errMessage = err instanceof Error ? err.message : String(err);
+      const message = errMessage.toLowerCase();
       const blockedByPolicy = message.includes("row-level security") || message.includes("comments_insert_self") || message.includes("disabled");
       if (blockedByPolicy) {
         patchPostAcrossTabs(modalPost.id, (post) => ({ ...post, comments_enabled: false }));
@@ -399,7 +400,7 @@ export const useProfilePostModalActions = <TPost extends ProfilePostPatchable>({
       }));
       patchPostAcrossTabs(modalPost.id, (post) => ({ ...post, comments_count: Math.max(0, post.comments_count - 1) }));
 
-      const { error } = await supabase.from("post_comments").delete().eq("id", commentId).eq("user_id", user.id);
+      const { error } = await supabase.from("post_comments").update({ deleted_at: new Date().toISOString() }).eq("id", commentId).eq("user_id", user.id);
       if (error) {
         setModalCommentsByPost((prev) => ({
           ...prev,

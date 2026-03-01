@@ -48,6 +48,8 @@ export const useProfileTabsData = <TPost extends PostLike>({
           .from("posts")
           .select("id, title, caption, media_url, mentions, likes_count, comments_count, comments_enabled, created_at")
           .eq("user_id", currentProfileId)
+          .eq("is_published", true)
+          .is("deleted_at", null)
           .order("created_at", { ascending: false })
           .range(from, to);
         return (data ?? []) as TPost[];
@@ -73,6 +75,8 @@ export const useProfileTabsData = <TPost extends PostLike>({
         .from("posts")
         .select("id, title, caption, media_url, mentions, likes_count, comments_count, comments_enabled, created_at")
         .contains("mentions", [username.toLowerCase()])
+        .eq("is_published", true)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .range(from, to);
 

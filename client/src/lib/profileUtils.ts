@@ -94,3 +94,31 @@ export const createClientCommentId = () => {
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 };
+
+export const getOptimizedImageUrl = (url: string | null, width?: number, quality = 80): string => {
+  if (!url) return "";
+  
+  // Si no es un endpoint de supabase storage targeteable, lo devolvemos tal cual.
+  // Evitamos procesar videos o recursos externos.
+  if (!url.includes("/storage/v1/object/public/") || isVideoUrl(url)) {
+    return url;
+  }
+
+  // M12: Solo transformamos si explícitamente se pide y detectamos que es Supabase.
+  // Si hay problemas con el servicio de transformación (Error 500), 
+  // el componente puede decidir usar la URL original.
+  try {
+    const optimizedUrl = new URL(url.replace("/storage/v1/object/public/", "/storage/v1/render/image/public/"));
+    
+    if (width) {
+      optimizedUrl.searchParams.set("width", width.toString());
+    }
+    optimizedUrl.searchParams.set("quality", quality.toString());
+    optimizedUrl.searchParams.set("format", "auto"); 
+    optimizedUrl.searchParams.set("resize", "contain");
+    
+    return optimizedUrl.toString();
+  } catch (e) {
+    return url;
+  }
+};

@@ -52,8 +52,11 @@ app.use(
   }),
 );
 app.use(cors(corsOptions));
-app.use(express.json({ limit: "1mb" }));
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ 
+  limit: "100kb", 
+  type: ["application/json", "text/plain"] 
+}));
+app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 app.use("/api", limiter);
 
 app.get("/health", (_req, res) => {
@@ -73,7 +76,7 @@ app.use((req, res, next) => {
         logLine = logLine.slice(0, 79) + "...";
       }
 
-      log(logLine);
+      log(logLine, "info", "express");
     }
   });
 
@@ -88,7 +91,7 @@ app.use((req, res, next) => {
     const status = normalized.status || normalized.statusCode || 500;
     const message = status >= 500 ? "Internal Server Error" : normalized.message || "Request failed";
 
-    log(`error ${status}: ${normalized.message ?? "unknown error"}`, "error");
+    log(`HTTP ${status}: ${normalized.message ?? "unknown error"}`, "error", "express");
     res.status(status).json({ message });
   });
 

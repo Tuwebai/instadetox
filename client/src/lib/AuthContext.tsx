@@ -162,6 +162,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const client = supabase;
+    
+    // BroadcastChannel sync binding
+    const authChannel = new BroadcastChannel("instadetox_auth_sync");
+    authChannel.onmessage = (event) => {
+      if (event.data?.type === "LOGOUT") {
+        if (isMounted) setUser(null);
+        window.location.reload();
+      }
+    };
 
     const hydrateFromSession = async (sessionUser: SupabaseAuthUser | null) => {
       if (!sessionUser) {
@@ -190,12 +199,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const {
           data: { session },
           error: sessionError,
-        } = await client.auth.getSession();
+        } = await client.auth.getSession().catch(err => {
+          console.warn("M12: Auth Session fetch failed, falling back to cache:", err);
+          return { data: { session: null }, error: null };
+        });
 
         if (sessionError) throw sessionError;
         
         // Hidratación en segundo plano (silenciosa)
-        void hydrateFromSession(session?.user ?? null);
+        const sessionUser = session?.user ?? null;
+        if (!sessionUser) {
+          // Intentar usar el usuario cacheado inmediatamente para no mostrar login injustamente
+          const cached = readCachedAuthUser();
+          if (cached && isMounted) setUser(cached);
+        }
+
+        void hydrateFromSession(sessionUser);
       } catch (err) {
         if (isMounted) {
           setUser(null);
@@ -229,6 +248,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       isMounted = false;
       subscription.unsubscribe();
+      authChannel.close();
     };
   }, []);
 
@@ -295,6 +315,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error: signOutError } = await supabase.auth.signOut();
       if (signOutError) throw signOutError;
       setUser(null);
+      try {
+        const bc = new BroadcastChannel("instadetox_auth_sync");
+        bc.postMessage({ type: "LOGOUT" });
+        bc.close();
+      } catch (e) {}
     } catch (err) {
       setError(err as Error);
     }

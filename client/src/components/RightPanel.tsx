@@ -240,7 +240,17 @@ const RightPanel = () => {
               <div key={friend.id} className="flex items-center p-2 hover:bg-black/20 rounded-lg transition-colors">
                 <div className="w-10 h-10 rounded-full overflow-hidden mr-3 bg-black/20 flex items-center justify-center">
                   {friend.avatar ? (
-                    <img src={friend.avatar} alt={`Avatar de ${friend.name}`} className="w-full h-full object-cover" />
+                    <img 
+                      src={friend.avatar} 
+                      alt={`Avatar de ${friend.name}`} 
+                      className="w-full h-full object-cover" 
+                      onError={(e) => {
+                        const target = e.currentTarget;
+                        if (target.src !== friend.avatar) {
+                          target.src = friend.avatar;
+                        }
+                      }}
+                    />
                   ) : (
                     <span className="text-xs text-gray-300">{friend.name.slice(0, 1).toUpperCase()}</span>
                   )}

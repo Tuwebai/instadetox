@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { useLocation } from "wouter";
+import { enqueueMutation } from "@/lib/outbox";
 
 interface ConversationRow {
   id: string;
@@ -28,6 +29,7 @@ interface MessageRow {
   sender_id: string;
   body: string;
   created_at: string;
+  media_url?: string | null;
   payload?: { replyTo?: ReplyToPayload; mediaUrl?: string | null } | null;
 }
 
@@ -249,7 +251,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     [userId],
   );
 
-  const loadConversations = useCallback(async (options?: { silent?: boolean }) => {
+  const loadConversations = useCallback(async (options?: { silent?: boolean; abortSignal?: AbortSignal }) => {
     if (!supabase || !userId) {
       if (hasBootstrappedRef.current) {
         setConversations([]);
@@ -259,6 +261,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       return;
     }
 
+    const { abortSignal } = options || {};
     const shouldShowLoading = !options?.silent;
     if (shouldShowLoading) {
       setLoadingConversations(true);
@@ -266,13 +269,15 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
 
     try {
       let participantRows: ParticipantRow[] = [];
-      let participantError: Error | null = null;
+      let participantError: any = null;
 
       for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (abortSignal?.aborted) return;
         const response = await supabase
           .from("conversation_participants")
           .select("conversation_id")
           .eq("user_id", userId);
+        
         participantRows = (response.data ?? []) as ParticipantRow[];
         participantError = response.error;
         if (!participantError) break;
@@ -280,11 +285,12 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       }
 
       if (participantError) {
-        setConversations([]);
-        setSelectedConversationId(null);
-        setMessages([]);
+        console.error("M12: loadConversations falló tras reintentos:", participantError);
+        // NO limpiamos conversaciones si hay error de red para no romper UX (Resiliencia M12)
         return;
       }
+      
+      if (abortSignal?.aborted) return;
 
       const conversationIds = participantRows.map((row) => row.conversation_id);
 
@@ -299,9 +305,10 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       }
 
       let conversationRows: ConversationRow[] = [];
-      let conversationError: Error | null = null;
+      let conversationError: any = null;
 
       for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (abortSignal?.aborted) return;
         const response = await supabase
           .from("conversations")
           .select("id, title, is_group, updated_at")
@@ -314,9 +321,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       }
 
       if (conversationError) {
-        setConversations([]);
-        setSelectedConversationId(null);
-        setMessages([]);
+        console.error("M12: Fallo al cargar detalles de conversaciones:", conversationError);
         return;
       }
 
@@ -394,8 +399,9 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
 
       const { data: recentRows } = await supabase
         .from("messages")
-        .select("id, conversation_id, sender_id, body, media_url, created_at")
+        .select("id, conversation_id, sender_id, body, media_url, created_at, payload")
         .in("conversation_id", conversationIds)
+        .is("deleted_at", null)
         .order("created_at", { ascending: false })
         .limit(500);
 
@@ -421,7 +427,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         return {
           ...row,
           title: resolvedTitle,
-          preview: latest?.body ? latest.body : (latest?.payload?.mediaUrl ? "Foto 📷" : null),
+          preview: latest?.body ? latest.body : (latest?.media_url || latest?.payload?.mediaUrl ? "Foto 📷" : null),
           previewAt: latest?.created_at ?? null,
           avatarUrl: directCounterpart?.avatar_url ?? null,
           username: directCounterpart?.username ?? null,
@@ -605,11 +611,17 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         }
       }
 
+      // Búsqueda Enterprise FTS (M12)
+      // Generamos un tsquery simple: si hay espacios, los unimos con & (AND) para precisión
+      const ftsQuery = trimmed.split(/\s+/).filter(Boolean).join(" & ");
+      
       const { data: rows } = await supabase
         .from("profiles")
         .select("id, username, full_name, avatar_url")
         .neq("id", userId)
-        .or(`username.ilike.%${trimmed}%,full_name.ilike.%${trimmed}%`)
+        .textSearch("search_vector", ftsQuery, { 
+          config: "simple"
+        })
         .limit(25);
 
       return ((rows ?? []) as Array<{ id: string; username: string | null; full_name: string | null; avatar_url: string | null }>)
@@ -732,9 +744,10 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     [findExistingDirectConversation, loadConversations, userId],
   );
 
-  const loadMessages = useCallback(async (conversation_id: string, options?: { silent?: boolean }) => {
+  const loadMessages = useCallback(async (conversation_id: string, options?: { silent?: boolean; abortSignal?: AbortSignal }) => {
     if (!supabase) return;
 
+    const { abortSignal } = options || {};
     const shouldShowLoading = !options?.silent;
     const cached = messagesCacheRef.current[conversation_id] ?? [];
     
@@ -749,17 +762,29 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
 
     try {
       let data: MessageRow[] = [];
+      let messageError: any = null;
+
       for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (abortSignal?.aborted) return;
         const response = await supabase
           .from("messages")
-          .select("id, conversation_id, sender_id, body, created_at, payload")
+          .select("id, conversation_id, sender_id, body, created_at, payload, media_url")
           .eq("conversation_id", conversation_id)
+          .is("deleted_at", null)
           .order("created_at", { ascending: true })
           .limit(PAGE_SIZE);
         data = (response.data ?? []) as MessageRow[];
-        if (!response.error) break;
+        messageError = response.error;
+        if (!messageError) break;
         await sleep(150 * (attempt + 1));
       }
+
+      if (messageError) {
+        console.error("M12: Error al cargar mensajes:", messageError);
+        return;
+      }
+
+      if (abortSignal?.aborted) return;
 
       const dbMessages = data.map((row) => ({
         id: row.id,
@@ -769,7 +794,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
         createdAt: row.created_at,
         deliveryState: "sent" as const,
         replyTo: row.payload?.replyTo ?? undefined,
-        mediaUrl: row.payload?.mediaUrl ?? null,
+        mediaUrl: row.media_url || row.payload?.mediaUrl || null,
       }));
 
       // Fusionar mensajes de DB con mensajes locales pendientes
@@ -825,7 +850,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
     try {
       const { data } = await supabase
         .from("messages")
-        .select("id, conversation_id, sender_id, body, created_at, payload")
+        .select("id, conversation_id, sender_id, body, created_at, payload, media_url")
         .eq("conversation_id", selectedConversationId)
         .lt("created_at", oldest.createdAt)
         .order("created_at", { ascending: false })
@@ -840,7 +865,7 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
           createdAt: row.created_at,
           deliveryState: "sent" as const,
           replyTo: row.payload?.replyTo ?? undefined,
-          mediaUrl: row.payload?.mediaUrl ?? null,
+          mediaUrl: row.media_url || row.payload?.mediaUrl || null,
         }))
         .reverse();
 
@@ -970,14 +995,40 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
           }
 
           void supabase.from("conversations").update({ updated_at: now }).eq("id", selectedConversationId);
-        } catch (error) {
-          console.error("Error persistencia mensaje (Background):", error);
-          const markFailed = (prev: InboxMessage[]) => 
-            prev.map(m => m.id === finalId ? { ...m, deliveryState: "failed" as const } : m);
+        } catch (error: any) {
+          console.error("Error persistencia mensaje (Background) -> Encolando en Outbox:", error);
           
-          setMessages(markFailed);
-          if (messagesCacheRef.current[selectedConversationId]) {
-            messagesCacheRef.current[selectedConversationId] = markFailed(messagesCacheRef.current[selectedConversationId]);
+          // M12 Resiliencia: Si es un error de red o timeout, guardar en el Outbox persistente
+          const isNetworkError = !window.navigator.onLine || 
+                                error.message?.includes('fetch') || 
+                                error.code === 'PGRST301' || 
+                                error.status === 0;
+
+          if (isNetworkError) {
+             await enqueueMutation({
+                id: finalId,
+                userId: userId,
+                type: 'message',
+                payload: {
+                  conversationId: selectedConversationId,
+                  body: trimmed,
+                  dbPayload: {
+                    ...(replyTo ? { replyTo } : {}),
+                    ...(uploadedUrl ? { mediaUrl: uploadedUrl } : {})
+                  }
+                },
+                createdAt: now
+             });
+             // El mensaje se queda en "sending" o podemos crear un estado de "queued" 
+             // Para esta fase lo mantendremos en la UI para que el retry engine lo maneje.
+          } else {
+            const markFailed = (prev: InboxMessage[]) => 
+              prev.map(m => m.id === finalId ? { ...m, deliveryState: "failed" as const } : m);
+            
+            setMessages(markFailed);
+            if (messagesCacheRef.current[selectedConversationId]) {
+              messagesCacheRef.current[selectedConversationId] = markFailed(messagesCacheRef.current[selectedConversationId]);
+            }
           }
         }
       })();
@@ -1041,7 +1092,9 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
   );
 
   useEffect(() => {
-    void loadConversations();
+    const controller = new AbortController();
+    void loadConversations({ abortSignal: controller.signal });
+    return () => controller.abort();
   }, [loadConversations]);
 
   useEffect(() => {
@@ -1054,15 +1107,19 @@ export const useMessagesInbox = ({ userId }: UseMessagesInboxParams) => {
       if (!prev[selectedConversationId]) return prev;
       return { ...prev, [selectedConversationId]: 0 };
     });
+    
+    const controller = new AbortController();
     const cachedMessages = messagesCacheRef.current[selectedConversationId];
     if (cachedMessages && cachedMessages.length > 0) {
       setMessages(cachedMessages);
-      void loadMessages(selectedConversationId, { silent: true });
+      void loadMessages(selectedConversationId, { silent: true, abortSignal: controller.signal });
       void loadPeerSeenAt(selectedConversationId);
-      return;
+      return () => controller.abort();
     }
-    void loadMessages(selectedConversationId);
+    void loadMessages(selectedConversationId, { abortSignal: controller.signal });
     void loadPeerSeenAt(selectedConversationId);
+    
+    return () => controller.abort();
   }, [loadMessages, loadPeerSeenAt, selectedConversationId]);
 
   useEffect(() => {

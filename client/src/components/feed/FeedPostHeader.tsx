@@ -1,5 +1,6 @@
 ﻿import { MoreHorizontal } from "lucide-react";
 import { Link } from "wouter";
+import { getOptimizedImageUrl } from "@/lib/profileUtils";
 
 interface FeedPostHeaderProps {
   username: string | null;
@@ -34,9 +35,16 @@ const FeedPostHeader = ({
     <header className="ig-post-header">
       <div className="ig-post-avatar">
         <img 
-          src={avatarUrl || "/avatar_fallback.jpg"} 
+          src={getOptimizedImageUrl(avatarUrl || "/avatar_fallback.jpg", 150)} 
           alt={username ?? "avatar"} 
           className="h-full w-full object-cover bg-white/10" 
+          onError={(e) => {
+            const target = e.currentTarget;
+            const original = avatarUrl || "/avatar_fallback.jpg";
+            if (target.src !== original) {
+              target.src = original;
+            }
+          }}
         />
       </div>
       <div className="min-w-0 flex-1">

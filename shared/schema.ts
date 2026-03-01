@@ -9,7 +9,15 @@ import {
   time,
   timestamp,
   uuid,
+  index,
+  customType,
 } from "drizzle-orm/pg-core";
+
+const tsvector = customType<{ data: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -58,7 +66,10 @@ export const profiles = pgTable("profiles", {
   quietHoursEnd: time("quiet_hours_end"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+  searchVector: tsvector("search_vector"),
+}, (table) => ({
+  profilesSearchIndex: index("idx_profiles_search").on(table.searchVector),
+}));
 
 export const follows = pgTable(
   "follows",
@@ -101,7 +112,12 @@ export const posts = pgTable("posts", {
   commentsCount: integer("comments_count").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  searchVector: tsvector("search_vector"),
+}, (table) => ({
+  deletedAtIndex: index("posts_deleted_at_idx").on(table.deletedAt),
+  postsSearchIndex: index("idx_posts_search").on(table.searchVector),
+}));
 
 export const postLikes = pgTable(
   "post_likes",
@@ -123,7 +139,10 @@ export const postComments = pgTable("post_comments", {
   content: text("content").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (table) => ({
+  deletedAtIndex: index("post_comments_deleted_at_idx").on(table.deletedAt),
+}));
 
 export const savedPosts = pgTable(
   "saved_posts",
@@ -173,7 +192,10 @@ export const messages = pgTable("messages", {
   payload: jsonb("payload"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-});
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (table) => ({
+  deletedAtIndex: index("messages_deleted_at_idx").on(table.deletedAt),
+}));
 
 /** Registra cuándo un participante vio por última vez una conversación. */
 export const conversationReads = pgTable(

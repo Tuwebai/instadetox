@@ -93,6 +93,7 @@ export const fetchModalInitialData = async ({
     .from("post_comments")
     .select("id, post_id, user_id, parent_id, content, created_at")
     .eq("post_id", postId)
+    .is("deleted_at", null)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })
     .limit(commentsPageSize + 1);
@@ -152,6 +153,7 @@ export const fetchOlderModalCommentsData = async ({
     .from("post_comments")
     .select("id, post_id, user_id, parent_id, content, created_at")
     .eq("post_id", postId)
+    .is("deleted_at", null)
     .or(`created_at.lt.${cursor.oldestCreatedAt},and(created_at.eq.${cursor.oldestCreatedAt},id.lt.${cursor.oldestId})`)
     .order("created_at", { ascending: false })
     .order("id", { ascending: false })

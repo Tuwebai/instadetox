@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { User } from "lucide-react";
+import { getOptimizedImageUrl } from "@/lib/profileUtils";
 
 interface ProfileHeaderSectionProps {
   username: string;
@@ -82,9 +83,16 @@ const ProfileHeaderSection = ({
                 title={isOwnProfile ? "Cambiar foto del perfil" : undefined}
               >
                 <img 
-                  src={avatarUrl || "/avatar_fallback.jpg"} 
+                  src={getOptimizedImageUrl(avatarUrl || "/avatar_fallback.jpg", 300)} 
                   alt={username} 
                   className="inst-profile-avatar-img bg-white/10" 
+                  onError={(e) => {
+                    const target = e.currentTarget;
+                    const original = avatarUrl || "/avatar_fallback.jpg";
+                    if (target.src !== original) {
+                      target.src = original;
+                    }
+                  }}
                 />
               </button>
             </div>

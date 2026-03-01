@@ -109,42 +109,74 @@ const Search = () => {
     setLoading(true);
     const safeQuery = value.replace(/[%_]/g, "");
 
-    const usersPromise = supabase
-      .from("profiles")
-      .select("id, username, full_name, avatar_url, bio")
-      .neq("id", user.id)
-      .or(`username.ilike.%${safeQuery}%,full_name.ilike.%${safeQuery}%,bio.ilike.%${safeQuery}%`)
-      .limit(20);
+    try {
+      // 1. Intentar Búsqueda Enterprise FTS (Garantía de relevancia)
+      const ftsQuery = safeQuery.split(/\s+/).filter(Boolean).join(" & ");
+      
+      const usersPromise = supabase
+        .from("profiles")
+        .select("id, username, full_name, avatar_url, bio")
+        .neq("id", user.id)
+        .textSearch("search_vector", ftsQuery, { config: "simple" })
+        .limit(20);
 
-    const postsPromise = supabase
-      .from("feed_posts")
-      .select("id, user_id, title, caption, media_url, created_at, username, full_name, avatar_url")
-      .or(`caption.ilike.%${safeQuery}%,title.ilike.%${safeQuery}%`)
-      .limit(30);
+      const postsPromise = supabase
+        .from("feed_posts")
+        .select("id, user_id, title, caption, media_url, created_at, username, full_name, avatar_url")
+        .textSearch("search_vector", ftsQuery, { config: "simple" })
+        .limit(30);
 
-    const [usersRes, postsRes] = await Promise.all([usersPromise, postsPromise]);
-    if (usersRes.error || postsRes.error) {
+      const [usersRes, postsRes] = await Promise.all([usersPromise, postsPromise]);
+
+      if (!usersRes.error && !postsRes.error) {
+        const users = (usersRes.data ?? []) as SearchUser[];
+        const posts = (postsRes.data ?? []) as SearchPost[];
+        setUserResults(users);
+        setPostResults(posts);
+        const allUserIds = [
+          ...users.map(u => u.id),
+          ...posts.map(p => p.user_id)
+        ];
+        await syncFollowState(allUserIds);
+        setLoading(false);
+        return;
+      }
+
+      // 2. Fallback a ILIKE (Resiliencia M12) si FTS falla
+      console.warn("M12: Search FTS failed, falling back to ILIKE.");
+      const usersFallback = await supabase
+        .from("profiles")
+        .select("id, username, full_name, avatar_url, bio")
+        .neq("id", user.id)
+        .or(`username.ilike.%${safeQuery}%,full_name.ilike.%${safeQuery}%,bio.ilike.%${safeQuery}%`)
+        .limit(20);
+
+      const postsFallback = await supabase
+        .from("feed_posts")
+        .select("id, user_id, title, caption, media_url, created_at, username, full_name, avatar_url")
+        .or(`caption.ilike.%${safeQuery}%,title.ilike.%${safeQuery}%`)
+        .limit(30);
+
+      const fUsers = (usersFallback.data ?? []) as SearchUser[];
+      const fPosts = (postsFallback.data ?? []) as SearchPost[];
+      setUserResults(fUsers);
+      setPostResults(fPosts);
+      const fallbackUserIds = [
+        ...fUsers.map(u => u.id),
+        ...fPosts.map(p => p.user_id)
+      ];
+      await syncFollowState(fallbackUserIds);
+    } catch (err) {
+      console.error("M12: Search critical failure:", err);
       toast({ title: "Error", description: "No se pudo completar la busqueda." });
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const users = (usersRes.data ?? []) as SearchUser[];
-    const posts = (postsRes.data ?? []) as SearchPost[];
-    setUserResults(users);
-    setPostResults(posts);
-
-    const idsFromUsers = users.map((u) => u.id);
-    const idsFromPosts = posts.map((p) => p.user_id);
-    await syncFollowState([...idsFromUsers, ...idsFromPosts]);
-
-    setLoading(false);
   };
 
   useEffect(() => {
     void loadRecommendedUsers();
   }, [user?.id]);
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void runSearch(normalizedQuery);

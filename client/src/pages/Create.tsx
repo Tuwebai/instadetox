@@ -21,6 +21,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import { supabase } from "@/lib/supabase";
 import InstagramMediaPicker from "@/components/create/InstagramMediaPicker";
+import { enqueueMutation } from "@/lib/outbox";
 
 type ContentType = "reflection" | "quote" | "goal" | "milestone" | "photo" | "video";
 
@@ -394,9 +395,41 @@ const Create = () => {
       }
 
       resetForm();
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "No se pudo guardar la publicación.";
-      toast({ title: "Error", description: message });
+    } catch (error: any) {
+      console.error("Error al guardar publicación -> Evaluando Outbox:", error);
+      
+      const isNetworkError = !window.navigator.onLine || 
+                            error.message?.includes('fetch') || 
+                            error.status === 0;
+
+      if (isNetworkError && user) {
+        // M12: Persistir en Outbox para evitar pérdida de contenido
+        await enqueueMutation({
+          id: crypto.randomUUID(),
+          userId: user.id,
+          type: 'post',
+          payload: {
+            type: contentType,
+            title: title.trim(),
+            caption: captionPayload.trim(),
+            media_url: serializeMediaList(mediaUrls),
+            mentions: selectedMentions,
+            video_cover_url: videoCoverUrl,
+          },
+          createdAt: new Date().toISOString()
+        });
+        
+        toast({ 
+          title: "Modo Offline / Error de Red", 
+          description: "Tu publicación se ha guardado localmente y se enviará automáticamente al recuperar la conexión.",
+          duration: 5000 
+        });
+        resetForm();
+        navigate("/inicio");
+      } else {
+        const message = error instanceof Error ? error.message : "No se pudo guardar la publicación.";
+        toast({ title: "Error", description: message });
+      }
     } finally {
       setIsSubmitting(false);
     }

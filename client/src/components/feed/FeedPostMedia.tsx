@@ -1,6 +1,7 @@
 ﻿import { useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { isVideoUrl } from "@/components/feed/feedPostUtils";
+import { getOptimizedImageUrl } from "@/lib/profileUtils";
 import MentionText from "@/components/ui/mention-text";
 
 interface FeedPostMediaProps {
@@ -88,7 +89,7 @@ const FeedPostMedia = ({
             </>
           ) : (
             <img
-              src={activeMedia}
+              src={getOptimizedImageUrl(activeMedia, 1080, 85)}
               alt="publicacion"
               className="absolute inset-0 w-full h-full object-contain"
               loading="lazy"
@@ -100,6 +101,12 @@ const FeedPostMedia = ({
                   ...prev,
                   [activeMedia]: element.naturalWidth / element.naturalHeight,
                 }));
+              }}
+              onError={(e) => {
+                const target = e.currentTarget;
+                if (target.src !== activeMedia) {
+                  target.src = activeMedia;
+                }
               }}
             />
           )

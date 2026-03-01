@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Virtuoso } from "react-virtuoso";
+import { getOptimizedImageUrl } from "@/lib/profileUtils";
 
 type ProfileTab = "posts" | "saved" | "tagged";
 
@@ -88,26 +90,10 @@ const ProfilePostsGrid = ({
   }, [activeTab, posts, postsIdsSignature]);
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          const postId = entry.target.getAttribute("data-post-id");
-          if (!postId) return;
-          setVisiblePostIds((prev) => {
-            if (prev.has(postId)) return prev;
-            const next = new Set(prev);
-            next.add(postId);
-            return next;
-          });
-          observer.unobserve(entry.target);
-        });
-      },
-      { rootMargin: "80px 0px", threshold: 0.01 },
-    );
-
-    postCardRefs.current.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
+    // [Optimización react-virtuoso]
+    // Eliminamos el guardado de IntersectionObserver de las Cards ya que 
+    // Virtuoso gestiona native viewport rendering (solo existen n rows activas en el DOM a la vez)
+    // Se mantiene `visiblePostIds` para trigger de media load cuando la mount cycle de react arranca
   }, [postsIdsSignature]);
 
   useEffect(() => {
@@ -150,100 +136,110 @@ const ProfilePostsGrid = ({
   }
 
   return (
-    <>
-      <div className="inst-profile-posts-grid-container" role="tabpanel" id={panelIdByTab[activeTab]} aria-labelledby={tabIdByTab[activeTab]}>
-        <div className="inst-profile-posts-grid">
-          {groupedRows.map((row, rowIndex) => (
-            <div key={`profile-grid-row-${rowIndex}`} className="inst-profile-grid-row">
-              {row.map((post, columnIndex) => {
-                if (!post) {
-                  return <div key={`profile-grid-empty-${rowIndex}-${columnIndex}`} className="inst-profile-post-card empty" />;
-                }
+    <div className="inst-profile-posts-grid-container" role="tabpanel" id={panelIdByTab[activeTab]} aria-labelledby={tabIdByTab[activeTab]}>
+      <Virtuoso
+        useWindowScroll
+        data={groupedRows}
+        overscan={800} // margen de carga para scroll rápido
+        className="inst-profile-posts-grid"
+        itemContent={(rowIndex, row) => (
+          <div className="inst-profile-grid-row">
+            {row.map((post, columnIndex) => {
+              if (!post) {
+                return <div key={`profile-grid-empty-${rowIndex}-${columnIndex}`} className="inst-profile-post-card empty" />;
+              }
 
-                const index = rowIndex * 3 + columnIndex;
-                const mediaList = parseMediaList(post.media_url);
-                const media = mediaList[0] ?? null;
-                const mediaIsVideo = isVideoUrl(media);
-                const isVisible = visiblePostIds.has(post.id);
-                const showTouchOverlay = touchActivePostId === post.id;
+              const index = rowIndex * 3 + columnIndex;
+              const mediaList = parseMediaList(post.media_url);
+              const media = mediaList[0] ?? null;
+              const mediaIsVideo = isVideoUrl(media);
+              const isVisible = visiblePostIds.has(post.id);
+              const showTouchOverlay = touchActivePostId === post.id;
 
-                return (
-                  <article
-                    key={post.id}
-                    className={`inst-profile-post-card${showTouchOverlay ? " touch-active" : ""}`}
-                    ref={(node) => {
-                      if (node) {
-                        postCardRefs.current.set(post.id, node);
-                      } else {
-                        postCardRefs.current.delete(post.id);
+              return (
+                <article
+                  key={post.id}
+                  className={`inst-profile-post-card${showTouchOverlay ? " touch-active" : ""}`}
+                  ref={(node) => {
+                    if (node) {
+                      postCardRefs.current.set(post.id, node);
+                    } else {
+                      postCardRefs.current.delete(post.id);
+                    }
+                  }}
+                  data-post-id={post.id}
+                >
+                  <button
+                    type="button"
+                    className="inst-profile-post-link"
+                    onClick={() => onOpenPost(index)}
+                    onMouseEnter={supportsHoverPrefetch ? () => onWarmPost(post) : undefined}
+                    onFocus={supportsHoverPrefetch ? () => onWarmPost(post) : undefined}
+                    onTouchStart={() => {
+                      setTouchActivePostId(post.id);
+                      if (touchOverlayTimeoutRef.current !== null) {
+                        window.clearTimeout(touchOverlayTimeoutRef.current);
                       }
+                      touchOverlayTimeoutRef.current = window.setTimeout(() => {
+                        setTouchActivePostId((current) => (current === post.id ? null : current));
+                      }, 320);
                     }}
-                    data-post-id={post.id}
+                    aria-label={`Abrir publicación ${index + 1}`}
                   >
-                    <button
-                      type="button"
-                      className="inst-profile-post-link"
-                      onClick={() => onOpenPost(index)}
-                      onMouseEnter={supportsHoverPrefetch ? () => onWarmPost(post) : undefined}
-                      onFocus={supportsHoverPrefetch ? () => onWarmPost(post) : undefined}
-                      onTouchStart={() => {
-                        setTouchActivePostId(post.id);
-                        if (touchOverlayTimeoutRef.current !== null) {
-                          window.clearTimeout(touchOverlayTimeoutRef.current);
-                        }
-                        touchOverlayTimeoutRef.current = window.setTimeout(() => {
-                          setTouchActivePostId((current) => (current === post.id ? null : current));
-                        }, 320);
-                      }}
-                      aria-label={`Abrir publicación ${index + 1}`}
-                    >
-                      <div className="inst-profile-post-wrapper">
-                        <div className="inst-profile-post-image-container">
-                          {isVisible && media ? (
-                            mediaIsVideo ? (
-                              <video src={media} className="inst-profile-post-image" muted playsInline preload="metadata" />
-                            ) : (
-                              <img
-                                src={media}
-                                alt={post.title ?? "publicación"}
-                                className="inst-profile-post-image"
-                                loading="lazy"
-                                decoding="async"
-                              />
-                            )
+                    <div className="inst-profile-post-wrapper">
+                      <div className="inst-profile-post-image-container">
+                        {isVisible && media ? (
+                          mediaIsVideo ? (
+                            <video src={media} className="inst-profile-post-image" muted playsInline preload="metadata" />
                           ) : (
-                            <div className="inst-profile-post-fallback" />
-                          )}
-                        </div>
+                            <img
+                              src={getOptimizedImageUrl(media, 400, 70)}
+                              alt={post.title ?? "publicación"}
+                              className="inst-profile-post-image"
+                              loading="lazy"
+                              decoding="async"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                if (target.src !== media) {
+                                  target.src = media;
+                                }
+                              }}
+                            />
+                          )
+                        ) : (
+                          <div className="inst-profile-post-fallback" />
+                        )}
+                      </div>
 
-                        <div className="inst-profile-post-overlay">
-                          <div className="inst-profile-overlay-stats">
-                            <span className="inst-profile-overlay-stat-item">
-                              <svg aria-label="Me gusta" className="inst-profile-overlay-stat-icon" fill="currentColor" height="24" viewBox="0 0 24 24" width="24">
-                                <path d="M16.792 3.904A4.989 4.989 0 0 1 21.5 9.122c0 3.072-2.652 4.959-5.197 7.222-2.512 2.243-3.865 3.469-4.303 3.752-.477-.309-2.143-1.823-4.303-3.752C5.141 14.072 2.5 12.167 2.5 9.122a4.989 4.989 0 0 1 4.708-5.218 4.21 4.21 0 0 1 3.675 1.941c.84 1.175.98 1.763 1.12 1.763s.278-.588 1.11-1.766a4.17 4.17 0 0 1 3.679-1.938m0-2a6.04 6.04 0 0 0-4.797 2.127 6.052 6.052 0 0 0-4.787-2.127A6.985 6.985 0 0 0 .5 9.122c0 3.61 2.55 5.827 5.015 7.97.283.246.569.494.853.747l1.027.918a44.998 44.998 0 0 0 3.518 3.018 2 2 0 0 0 2.174 0 45.263 45.263 0 0 0 3.626-3.115l.922-.824c.293-.26.59-.519.885-.774 2.334-2.025 4.98-4.32 4.98-7.94a6.985 6.985 0 0 0-6.708-7.218Z" />
-                              </svg>
-                              <span className="inst-profile-overlay-stat-count">{formatCompact(post.likes_count)}</span>
-                            </span>
-                            <span className="inst-profile-overlay-stat-item">
-                              <svg aria-label="Comentarios" className="inst-profile-overlay-stat-icon" fill="currentColor" height="24" viewBox="0 0 24 24" width="24">
-                                <path d="M20.656 17.008a9.993 9.993 0 1 0-3.59 3.615L22 22Z" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="2" />
-                              </svg>
-                              <span className="inst-profile-overlay-stat-count">{formatCompact(post.comments_count)}</span>
-                            </span>
-                          </div>
+                      <div className="inst-profile-post-overlay">
+                        <div className="inst-profile-overlay-stats">
+                          <span className="inst-profile-overlay-stat-item">
+                            <svg aria-label="Me gusta" className="inst-profile-overlay-stat-icon" fill="currentColor" height="24" viewBox="0 0 24 24" width="24">
+                              <path d="M16.792 3.904A4.989 4.989 0 0 1 21.5 9.122c0 3.072-2.652 4.959-5.197 7.222-2.512 2.243-3.865 3.469-4.303 3.752-.477-.309-2.143-1.823-4.303-3.752C5.141 14.072 2.5 12.167 2.5 9.122a4.989 4.989 0 0 1 4.708-5.218 4.21 4.21 0 0 1 3.675 1.941c.84 1.175.98 1.763 1.12 1.763s.278-.588 1.11-1.766a4.17 4.17 0 0 1 3.679-1.938m0-2a6.04 6.04 0 0 0-4.797 2.127 6.052 6.052 0 0 0-4.787-2.127A6.985 6.985 0 0 0 .5 9.122c0 3.61 2.55 5.827 5.015 7.97.283.246.569.494.853.747l1.027.918a44.998 44.998 0 0 0 3.518 3.018 2 2 0 0 0 2.174 0 45.263 45.263 0 0 0 3.626-3.115l.922-.824c.293-.26.59-.519.885-.774 2.334-2.025 4.98-4.32 4.98-7.94a6.985 6.985 0 0 0-6.708-7.218Z" />
+                            </svg>
+                            <span className="inst-profile-overlay-stat-count">{formatCompact(post.likes_count)}</span>
+                          </span>
+                          <span className="inst-profile-overlay-stat-item">
+                            <svg aria-label="Comentarios" className="inst-profile-overlay-stat-icon" fill="currentColor" height="24" viewBox="0 0 24 24" width="24">
+                              <path d="M20.656 17.008a9.993 9.993 0 1 0-3.59 3.615L22 22Z" fill="none" stroke="currentColor" strokeLinejoin="round" strokeWidth="2" />
+                            </svg>
+                            <span className="inst-profile-overlay-stat-count">{formatCompact(post.comments_count)}</span>
+                          </span>
                         </div>
                       </div>
-                      <div className="inst-profile-post-spacer" />
-                    </button>
-                  </article>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-      </div>
-      {loadingMore ? <div className="inst-profile-grid-loading-more">Cargando más publicaciones...</div> : null}
-    </>
+                    </div>
+                    <div className="inst-profile-post-spacer" />
+                  </button>
+                </article>
+              );
+            })}
+          </div>
+        )}
+        components={{
+          Footer: () => loadingMore ? <div className="inst-profile-grid-loading-more pb-6">Cargando más publicaciones...</div> : <div className="pb-6" />
+        }}
+      />
+    </div>
   );
 };
 

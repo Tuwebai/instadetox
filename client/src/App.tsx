@@ -20,9 +20,13 @@ import NotFound from "@/pages/not-found";
 import { useState } from "react";
 import { AuthProvider, useAuth } from "@/lib/AuthContext";
 import SplashScreen from "@/components/ui/SplashScreen";
+import { useOutboxRetry } from "@/hooks/useOutboxRetry";
 
 function AppRoutes() {
   const { user, loading } = useAuth();
+  
+  // Activar Retry Engine global (Fase 4C)
+  useOutboxRetry(user?.id);
 
   if (loading) {
     return <SplashScreen />;

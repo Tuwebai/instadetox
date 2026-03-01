@@ -1,10 +1,71 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { supabaseAdmin, requireAuth, type AuthenticatedRequest } from "./supabase";
+import { insertCommentSchema } from "./schemas/apiContracts";
+import rateLimit from "express-rate-limit";
+import { log } from "./logger";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   
-  // POST /api/posts/:id/like
+  // -- OBSERVABILITY & HEALTH (Enterprise M12) --
+
+  const metricsLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 50, // Límite estricto para evitar spam de telemetría
+    message: { error: "Too many metrics requests" }
+  });
+
+  app.get("/api/health", (_req, res) => {
+    return res.json({
+      status: "ok",
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString()
+    });
+  });
+
+  app.get("/api/health/deep", async (_req, res) => {
+    const start = Date.now();
+    const timeout = 3000; // 3s Timeout
+    
+    try {
+      // Race entre la query de la DB y un timeout controlado
+      const dbCheck = Promise.race([
+        supabaseAdmin.from("profiles").select("count").limit(1).then(r => r.error ? Promise.reject(r.error) : "ok"),
+        new Promise((_, reject) => setTimeout(() => reject(new Error("Database timeout")), timeout))
+      ]);
+
+      await dbCheck;
+
+      return res.json({
+        status: "ok",
+        engine: "Instadetox Express Proxy",
+        version: process.env.npm_package_version || "1.0.0",
+        env: process.env.NODE_ENV || "development",
+        db: "connected",
+        latency: `${Date.now() - start}ms`
+      });
+    } catch (err) {
+      log(`Deep Health Check failed: ${err instanceof Error ? err.message : String(err)}`, "error", "health");
+      return res.status(503).json({
+        status: "down",
+        db: "disconnected",
+        error: err instanceof Error ? err.message : "Persistence layer unavailable"
+      });
+    }
+  });
+
+  app.post("/api/metrics/performance", metricsLimiter, (req, res) => {
+    const { metric, value, route } = req.body;
+    if (!metric || value === undefined) {
+      log(`Invalid metrics payload: ${JSON.stringify(req.body)}`, "warn", "telemetry");
+      return res.status(400).json({ error: "Invalid metrics payload" });
+    }
+
+    log(`Metric Capture: ${metric}=${value} for ${route || "unknown"}`, "info", "telemetry");
+    return res.status(202).end(); // Accepted
+  });
+
+  // -- APP ROUTES --
   app.post("/api/posts/:id/like", requireAuth, async (req: AuthenticatedRequest, res) => {
     const userId = req.user!.id;
     const postId = req.params.id;
@@ -70,9 +131,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/posts/:id/comment", requireAuth, async (req: AuthenticatedRequest, res) => {
     const userId = req.user!.id;
     const postId = req.params.id;
-    const { content, parent_id, client_id } = req.body;
 
-    if (!postId || !content) return res.status(400).json({ error: "Missing post ID or content" });
+    if (!postId) return res.status(400).json({ error: "Missing post ID" });
+
+    const parsedBody = insertCommentSchema.safeParse(req.body);
+    if (!parsedBody.success) {
+      return res.status(400).json({ 
+        error: "Validation failed", 
+        details: parsedBody.error.errors 
+      });
+    }
+
+    const { content, parent_id, client_id } = parsedBody.data;
 
     // 1. Check if comments are enabled and get owner
     const { data: post, error: postErr } = await req.userSupabase!

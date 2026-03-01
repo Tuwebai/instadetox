@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -8,28 +8,28 @@
   :root {
     --background: 212 38% 7%;
     --foreground: 210 40% 96%;
-    
+
     --card: 208 46% 12%;
     --card-foreground: 210 40% 96%;
-    
+
     --popover: 208 46% 12%;
     --popover-foreground: 210 40% 96%;
-    
+
     --primary: 188 84% 58%;
     --primary-foreground: 215 35% 10%;
-    
+
     --secondary: 201 66% 35%;
     --secondary-foreground: 210 40% 98%;
-    
+
     --muted: 212 28% 20%;
     --muted-foreground: 214 22% 74%;
-    
+
     --accent: 204 44% 23%;
     --accent-foreground: 210 40% 98%;
-    
+
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-    
+
     --border: 203 28% 36%;
     --input: 203 28% 36%;
     --ring: 212.7 26.8% 83.9%;
@@ -45,7 +45,14 @@
     --instadetox-border: rgba(148, 163, 184, 0.2);
     --instadetox-accent: #10b981;
     --instadetox-accent-hover: #059669;
-    --instadetox-story-gradient: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+    --instadetox-story-gradient: linear-gradient(
+      45deg,
+      #f09433 0%,
+      #e6683c 25%,
+      #dc2743 50%,
+      #cc2366 75%,
+      #bc1888 100%
+    );
   }
 }
 
@@ -74,7 +81,7 @@
   .glass {
     @apply bg-slate-900/40 backdrop-blur-xl border border-white/20 shadow-xl;
   }
-  
+
   .glass-dark {
     @apply bg-slate-950/55 backdrop-blur-xl border border-white/15 shadow-xl;
   }
@@ -82,15 +89,15 @@
   .frosted {
     @apply bg-slate-900/45 backdrop-blur-xl border border-white/20 shadow-xl;
   }
-  
+
   .nav-link {
     @apply transition-all duration-300 ease-in-out;
   }
-  
+
   .nav-link:hover {
     @apply bg-white/10 translate-x-1;
   }
-  
+
   .nav-link.active {
     @apply bg-primary/30 border-l-2 border-primary text-white;
   }
@@ -363,7 +370,9 @@
   .ig-create-media-body {
     min-height: 460px;
     @apply px-6 py-8 flex items-center justify-center;
-    transition: background-color 0.18s ease, border-color 0.18s ease;
+    transition:
+      background-color 0.18s ease,
+      border-color 0.18s ease;
     background: #1f2430;
   }
 
@@ -549,14 +558,20 @@
     margin: 0 auto;
     padding-bottom: 2rem;
     color: var(--instadetox-text-primary);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+      sans-serif;
   }
 
   .inst-profile-shell {
     width: 100%;
     max-width: 935px;
     margin: 0 auto;
-    background: color-mix(in srgb, var(--instadetox-bg-primary) 84%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--instadetox-bg-primary) 84%,
+      transparent
+    );
     border: 1px solid var(--instadetox-border);
     border-radius: 14px;
     backdrop-filter: blur(14px);
@@ -658,7 +673,11 @@
   }
 
   .inst-profile-options-btn:hover {
-    background: color-mix(in srgb, var(--instadetox-bg-tertiary) 70%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--instadetox-bg-tertiary) 70%,
+      transparent
+    );
     border-color: var(--instadetox-border);
   }
 
@@ -697,7 +716,9 @@
     --text-link: #38bdf8;
     --border-color: rgba(148, 163, 184, 0.15);
     --border-divider: rgba(148, 163, 184, 0.1);
-    --font-system: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-system:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+      sans-serif;
     --title-size: 30px;
     --title-line-height: 30px;
     --section-size: 20px;
@@ -1084,205 +1105,202 @@
     text-decoration: underline;
   }
 
-/* Estilos para multimedia en burbujas — REFORZADO */
-.ig-dm-bubble.has-media {
-  padding: 0;
-  max-width: 280px;
-  overflow: hidden;
-  display: block;
-  background: var(--ig-bubble-background, #262626);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 22px;
-}
+  /* Estilos para multimedia en burbujas — REFORZADO */
+  .ig-dm-bubble.has-media {
+    padding: 0;
+    max-width: 280px;
+    overflow: hidden;
+    display: block;
+    background: var(--ig-bubble-background, #262626);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 22px;
+  }
 
-/* Solo imagen: SIN BURBUJA - Estilo Instagram puro */
-.ig-dm-bubble.is-media-only {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  max-width: 280px;
-  /* Eliminar cualquier rastro de burbuja */
-  border-radius: 0 !important;
-}
+  /* Solo imagen: SIN BURBUJA - Estilo Instagram puro */
+  .ig-dm-bubble.is-media-only {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 280px;
+    /* Eliminar cualquier rastro de burbuja */
+    border-radius: 0 !important;
+  }
 
-/* Eliminar completamente la burbuja base para media-only */
-.ig-dm-bubble.is-media-only,
-.ig-dm-bubble.is-media-one.is-mine,
-.ig-dm-bubble.is-media-only:not(.is-mine) {
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
-}
+  /* Eliminar completamente la burbuja base para media-only */
+  .ig-dm-bubble.is-media-only,
+  .ig-dm-bubble.is-media-one.is-mine,
+  .ig-dm-bubble.is-media-only:not(.is-mine) {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+  }
 
-/* Borrar cualquier rastro de la burbuja base si es media-only */
-.ig-dm-bubble.is-media-only::before,
-.ig-dm-bubble.is-media-only::after {
-  display: none !important;
-  content: none !important;
-}
+  /* Borrar cualquier rastro de la burbuja base si es media-only */
+  .ig-dm-bubble.is-media-only::before,
+  .ig-dm-bubble.is-media-only::after {
+    display: none !important;
+    content: none !important;
+  }
 
-/* Burbuja propia (Azul/Gris) con multimedia - pero NO para media-only */
-.ig-dm-bubble.is-mine.has-media:not(.is-media-only) {
-  background: #374151 !important;
-}
+  /* Burbuja propia (Azul/Gris) con multimedia - pero NO para media-only */
+  .ig-dm-bubble.is-mine.has-media:not(.is-media-only) {
+    background: #374151 !important;
+  }
 
-.ig-dm-bubble-media {
-  width: 100%;
-  line-height: 0;
-  overflow: hidden;
-}
+  .ig-dm-bubble-media {
+    width: 100%;
+    line-height: 0;
+    overflow: hidden;
+  }
 
-.ig-dm-message-img {
-  width: 100%;
-  height: auto;
-  max-height: 450px; /* Aumentar para que se vean mejor */
-  display: block;
-  object-fit: contain; /* Mejor que cover para fotos de chat */
-  background: transparent;
-}
+  .ig-dm-message-img {
+    width: 100%;
+    height: auto;
+    max-height: 450px; /* Aumentar para que se vean mejor */
+    display: block;
+    object-fit: contain; /* Mejor que cover para fotos de chat */
+    background: transparent;
+  }
 
-/* Solo redondear imagen si es el único contenido */
-.ig-dm-bubble.has-media:not(:has(p)) .ig-dm-message-img {
-  border-radius: 22px;
-}
+  /* Solo redondear imagen si es el único contenido */
+  .ig-dm-bubble.has-media:not(:has(p)) .ig-dm-message-img {
+    border-radius: 22px;
+  }
 
-/* Si hay texto, redondear solo arriba de la imagen y dar padding al texto */
-.ig-dm-bubble.has-media:has(p) .ig-dm-message-img {
-  border-radius: 22px 22px 0 0;
-}
+  /* Si hay texto, redondear solo arriba de la imagen y dar padding al texto */
+  .ig-dm-bubble.has-media:has(p) .ig-dm-message-img {
+    border-radius: 22px 22px 0 0;
+  }
 
-.ig-dm-bubble.has-media p {
-  padding: 10px 14px;
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.4;
-  color: #ffffff;
-}
+  .ig-dm-bubble.has-media p {
+    padding: 10px 14px;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.4;
+    color: #ffffff;
+  }
 
-/* ============================================
+  /* ============================================
    LAYOUT ESPECIAL: TEXTO + IMAGEN (IG Style)
    Misma burbuja, pero imagen sin fondo blanco
    ============================================ */
 
-/* Cuando hay texto + imagen en la misma burbuja */
-.ig-dm-bubble.has-media-with-text {
-  /* Mantener estructura normal de burbuja */
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-  overflow: hidden;
-}
+  /* Cuando hay texto + imagen en la misma burbuja */
+  .ig-dm-bubble.has-media-with-text {
+    /* Mantener estructura normal de burbuja */
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
+  }
 
-/* La imagen va arriba y NO tiene fondo de burbuja */
-.ig-dm-bubble.has-media-with-text .ig-dm-bubble-media {
-  order: -1; /* Mover arriba */
-  background: transparent !important;
-  padding: 0;
-}
+  /* La imagen va arriba y NO tiene fondo de burbuja */
+  .ig-dm-bubble.has-media-with-text .ig-dm-bubble-media {
+    order: -1; /* Mover arriba */
+    background: transparent !important;
+    padding: 0;
+  }
 
-/* Imagen sin bordes redondeados abajo (solo arriba) */
-.ig-dm-bubble.has-media-with-text .ig-dm-message-img {
-  border-radius: 22px 22px 0 0;
-  background: transparent !important;
-}
+  /* Imagen sin bordes redondeados abajo (solo arriba) */
+  .ig-dm-bubble.has-media-with-text .ig-dm-message-img {
+    border-radius: 22px 22px 0 0;
+    background: transparent !important;
+  }
 
-/* El texto va abajo CON la burbuja normal */
-.ig-dm-bubble.has-media-with-text p {
-  padding: 10px 14px;
-  margin: 0;
-  background: inherit; /* Heredar fondo de burbuja */
-  border-radius: 0 0 22px 22px;
-}
+  /* El texto va abajo CON la burbuja normal */
+  .ig-dm-bubble.has-media-with-text p {
+    padding: 10px 14px;
+    margin: 0;
+    background: inherit; /* Heredar fondo de burbuja */
+    border-radius: 0 0 22px 22px;
+  }
 
-/* ============================================
+  /* ============================================
    LAYOUT SEPARADO: TEXTO (burbuja) + IMAGEN (sin burbuja)
    Burbuja arriba, multimedia con botones abajo
    ============================================ */
 
-/* Contenedor principal - columna vertical */
-.ig-dm-message-line.has-separated-media {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: flex-start !important;
-  gap: 4px !important;
-}
+  /* Contenedor principal - columna vertical */
+  .ig-dm-message-line.has-separated-media {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+  }
 
-.ig-dm-message-line.has-separated-media.is-mine {
-  align-items: flex-end !important;
-}
+  .ig-dm-message-line.has-separated-media.is-mine {
+    align-items: flex-end !important;
+  }
 
-/* Fila 2: Multimedia + Botones hover (horizontal) */
-.ig-dm-media-row-wrapper {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-}
+  /* Fila 2: Multimedia + Botones hover (horizontal) */
+  .ig-dm-media-row-wrapper {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+  }
 
-/* Para mensajes propios: botones a la izquierda */
-.ig-dm-message-line.has-separated-media.is-mine .ig-dm-media-row-wrapper {
-  flex-direction: row-reverse;
-}
+  /* Para mensajes propios: botones a la izquierda */
+  .ig-dm-message-line.has-separated-media.is-mine .ig-dm-media-row-wrapper {
+    flex-direction: row-reverse;
+  }
 
-/* Ocultar botones hover originales en layout separado */
-.ig-dm-message-line.has-separated-media > .ig-dm-hover-actions {
-  display: none !important;
-}
+  /* Ocultar botones hover originales en layout separado */
+  .ig-dm-message-line.has-separated-media > .ig-dm-hover-actions {
+    display: none !important;
+  }
 
-/* Botones hover al lado de la multimedia */
-.ig-dm-media-row-wrapper .ig-dm-hover-actions {
-  display: flex;
-  flex-direction: row;
-  gap: 4px;
-  position: static;
-  opacity: 1;
-}
+  /* Botones hover al lado de la multimedia */
+  .ig-dm-media-row-wrapper .ig-dm-hover-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    position: static;
+    opacity: 1;
+  }
 
-/* Multimedia sin burbuja */
-.ig-dm-separated-media {
-  max-width: 280px;
-  overflow: hidden;
-  border-radius: 22px;
-  line-height: 0;
-  background: transparent;
-}
+  /* Multimedia sin burbuja */
+  .ig-dm-separated-media {
+    max-width: 280px;
+    overflow: hidden;
+    border-radius: 22px;
+    line-height: 0;
+    background: transparent;
+  }
 
-.ig-dm-separated-media-img {
-  width: 100%;
-  height: auto;
-  max-height: 450px;
-  display: block;
-  object-fit: contain;
-  background: transparent;
-  border-radius: 22px;
-}
+  .ig-dm-separated-media-img {
+    width: 100%;
+    height: auto;
+    max-height: 450px;
+    display: block;
+    object-fit: contain;
+    background: transparent;
+    border-radius: 22px;
+  }
 
-/* La burbuja del texto (arriba) - usa estilos normales */
-.ig-dm-message-line.has-separated-media .ig-dm-bubble {
-  /* Hereda estilos normales de .ig-dm-bubble */
-}
+  /* La burbuja del texto (arriba) - usa estilos normales de .ig-dm-bubble */
 
-/* La imagen separada (abajo) - sin burbuja */
-.ig-dm-separated-media {
-  max-width: 280px;
-  overflow: hidden;
-  border-radius: 22px;
-  line-height: 0;
-  background: transparent;
-}
+  /* La imagen separada (abajo) - sin burbuja */
+  .ig-dm-separated-media {
+    max-width: 280px;
+    overflow: hidden;
+    border-radius: 22px;
+    line-height: 0;
+    background: transparent;
+  }
 
-.ig-dm-separated-media-img {
-  width: 100%;
-  height: auto;
-  max-height: 450px;
-  display: block;
-  object-fit: contain;
-  background: transparent;
-  border-radius: 22px;
-}
+  .ig-dm-separated-media-img {
+    width: 100%;
+    height: auto;
+    max-height: 450px;
+    display: block;
+    object-fit: contain;
+    background: transparent;
+    border-radius: 22px;
+  }
 
   .inst-profile-link-row {
     margin-top: 4px;
@@ -1318,7 +1336,11 @@
     height: 36px;
     border-radius: 8px;
     border: 1px solid var(--instadetox-border);
-    background: color-mix(in srgb, var(--instadetox-bg-secondary) 80%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--instadetox-bg-secondary) 80%,
+      transparent
+    );
     color: var(--instadetox-text-primary);
     font-size: 14px;
     font-weight: 600;
@@ -1327,7 +1349,11 @@
   }
 
   .inst-profile-action-btn:hover {
-    background: color-mix(in srgb, var(--instadetox-bg-tertiary) 80%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--instadetox-bg-tertiary) 80%,
+      transparent
+    );
   }
 
   .inst-profile-follow-btn {
@@ -1336,7 +1362,11 @@
   }
 
   .inst-profile-follow-btn:hover {
-    background: color-mix(in srgb, var(--instadetox-accent-hover) 86%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--instadetox-accent-hover) 86%,
+      transparent
+    );
   }
 
   .inst-profile-tabs {
@@ -1410,7 +1440,9 @@
     font-weight: 600;
     letter-spacing: 1px;
     text-transform: uppercase;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+      sans-serif;
     display: none;
   }
 
@@ -1460,7 +1492,11 @@
 
   .inst-profile-grid-skeleton {
     aspect-ratio: 1 / 1;
-    background: color-mix(in srgb, var(--instadetox-bg-tertiary) 70%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--instadetox-bg-tertiary) 70%,
+      transparent
+    );
     animation: pulse 1.2s ease-in-out infinite;
   }
 
@@ -1593,7 +1629,9 @@
     font-size: 14px;
     line-height: 18px;
     font-weight: 600;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-family:
+      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+      sans-serif;
   }
 
   .inst-profile-post-overlay-stat,
@@ -1798,354 +1836,403 @@
     height: 0;
     display: none;
   }
-}
 
-  .privacy-page {
-    width: 100%;
-    max-width: 1240px;
-    margin: 0 auto;
-    color: #f8fafc;
-  }
-
-  .privacy-topbar {
-    position: sticky;
-    top: 0;
-    z-index: 20;
+  /* M12 Outbox Resilience Styles */
+  .ig-dm-message-status-container {
     display: flex;
     flex-direction: column;
-    gap: 14px;
-    padding: 14px 16px;
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    border-radius: 16px;
-    background: rgba(15, 23, 42, 0.72);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    box-shadow: 0 12px 34px rgba(2, 6, 23, 0.28);
+    align-items: flex-end;
+    margin-top: 2px;
+    padding: 0 4px;
+    gap: 2px;
   }
 
-  .privacy-topbar-brand {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .privacy-topbar-title-wrap {
-    min-width: 0;
-  }
-
-  .privacy-topbar-kicker {
-    margin: 0;
-    color: #94a3b8;
+  .ig-dm-status-label {
     font-size: 11px;
     line-height: 14px;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
+    font-weight: 400;
+  }
+
+  .ig-dm-status-label.is-sending {
+    color: var(--instadetox-text-secondary);
+    font-style: italic;
+    animation: pulse 1.5s infinite;
+  }
+
+  .ig-dm-status-label.is-failed {
+    color: #fca5a5; /* Red-300 */
+    font-weight: 600;
+  }
+
+  .ig-dm-retry-btn-v2 {
+    font-size: 11px;
     font-weight: 700;
+    color: var(--instadetox-accent);
+    background: none;
+    border: none;
+    padding: 2px 0;
+    cursor: pointer;
+    text-decoration: underline;
+    transition: opacity 0.2s;
   }
 
-  .privacy-topbar-title {
-    margin: 3px 0 0;
-    color: #f8fafc;
-    font-size: 18px;
-    line-height: 22px;
-    font-weight: 600;
+  .ig-dm-retry-btn-v2:hover {
+    opacity: 0.8;
   }
 
-  .privacy-topbar-actions {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
+  .ig-dm-bubble.is-sending {
+    opacity: 0.85;
   }
+}
 
-  .privacy-topbar-updated {
-    margin: 0;
-    color: #94a3b8;
-    font-size: 13px;
-    line-height: 18px;
-  }
+.privacy-page {
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  color: #f8fafc;
+}
 
-  .privacy-pill-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    height: 34px;
-    padding: 0 12px;
-    border-radius: 999px;
-    border: 1px solid rgba(16, 185, 129, 0.35);
-    color: #a7f3d0;
-    background: rgba(16, 185, 129, 0.12);
-    font-size: 13px;
-    font-weight: 600;
-  }
+.privacy-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 12px 34px rgba(2, 6, 23, 0.28);
+}
 
+.privacy-topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.privacy-topbar-title-wrap {
+  min-width: 0;
+}
+
+.privacy-topbar-kicker {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 700;
+}
+
+.privacy-topbar-title {
+  margin: 3px 0 0;
+  color: #f8fafc;
+  font-size: 18px;
+  line-height: 22px;
+  font-weight: 600;
+}
+
+.privacy-topbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.privacy-topbar-updated {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.privacy-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #a7f3d0;
+  background: rgba(16, 185, 129, 0.12);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.privacy-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 330px) minmax(0, 1fr);
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.privacy-sidenav {
+  position: sticky;
+  top: 112px;
+  align-self: start;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  padding: 12px;
+  max-height: calc(100vh - 130px);
+  overflow: auto;
+}
+
+.privacy-sidenav-title {
+  margin: 0 0 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.privacy-sidenav-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.privacy-sidenav-link {
+  display: grid;
+  gap: 4px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  background: rgba(15, 23, 42, 0.26);
+  padding: 10px;
+  text-decoration: none;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
+}
+
+.privacy-sidenav-link:hover {
+  background: rgba(30, 41, 59, 0.55);
+  border-color: rgba(148, 163, 184, 0.25);
+}
+
+.privacy-sidenav-link.is-active {
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(14, 116, 144, 0.26);
+}
+
+.privacy-sidenav-link-title {
+  color: #f8fafc;
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 600;
+}
+
+.privacy-sidenav-link-summary {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.privacy-main {
+  display: grid;
+  gap: 12px;
+}
+
+.privacy-hero,
+.privacy-section-card,
+.privacy-faq {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.46);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 10px 28px rgba(2, 6, 23, 0.2);
+}
+
+.privacy-hero {
+  padding: 20px;
+}
+
+.privacy-hero-eyebrow {
+  margin: 0;
+  color: #67e8f9;
+  font-size: 12px;
+  line-height: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.9px;
+  font-weight: 700;
+}
+
+.privacy-hero-title {
+  margin: 8px 0 10px;
+  color: #f8fafc;
+  font-size: 28px;
+  line-height: 32px;
+  font-weight: 650;
+}
+
+.privacy-hero-copy {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 15px;
+  line-height: 24px;
+  max-width: 68ch;
+}
+
+.privacy-hero-actions {
+  margin-top: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.privacy-hero-link {
+  display: inline-flex;
+  align-items: center;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #a5f3fc;
+  background: rgba(8, 145, 178, 0.2);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.privacy-hero-link.muted {
+  border-color: rgba(148, 163, 184, 0.3);
+  color: #cbd5e1;
+  background: rgba(51, 65, 85, 0.35);
+}
+
+.privacy-section-card {
+  padding: 18px;
+  scroll-margin-top: 132px;
+}
+
+.privacy-section-head {
+  margin-bottom: 12px;
+}
+
+.privacy-section-title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 21px;
+  line-height: 26px;
+  font-weight: 600;
+}
+
+.privacy-section-summary {
+  margin: 8px 0 0;
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.privacy-section-points {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: #e2e8f0;
+  font-size: 14px;
+  line-height: 22px;
+}
+
+.privacy-faq {
+  padding: 18px;
+}
+
+.privacy-faq-title {
+  margin: 0 0 10px;
+  color: #f8fafc;
+  font-size: 20px;
+  line-height: 25px;
+  font-weight: 600;
+}
+
+.privacy-faq-list {
+  display: grid;
+  gap: 8px;
+}
+
+.privacy-faq-item {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.38);
+  padding: 10px 12px;
+}
+
+.privacy-faq-item summary {
+  cursor: pointer;
+  color: #f8fafc;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.privacy-faq-item p {
+  margin: 8px 0 0;
+  color: #cbd5e1;
+  font-size: 14px;
+  line-height: 21px;
+}
+
+@media (max-width: 1024px) {
   .privacy-layout {
-    display: grid;
-    grid-template-columns: minmax(0, 330px) minmax(0, 1fr);
-    gap: 16px;
-    margin-top: 14px;
+    grid-template-columns: 1fr;
   }
 
   .privacy-sidenav {
-    position: sticky;
-    top: 112px;
-    align-self: start;
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    border-radius: 16px;
-    background: rgba(15, 23, 42, 0.55);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    padding: 12px;
-    max-height: calc(100vh - 130px);
-    overflow: auto;
-  }
-
-  .privacy-sidenav-title {
-    margin: 0 0 8px;
-    color: #e2e8f0;
-    font-size: 13px;
-    line-height: 18px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.6px;
+    position: static;
+    max-height: none;
+    overflow: visible;
   }
 
   .privacy-sidenav-list {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: grid;
-    gap: 6px;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(220px, 1fr);
+    overflow-x: auto;
+    padding-bottom: 2px;
   }
+}
 
-  .privacy-sidenav-link {
-    display: grid;
-    gap: 4px;
+@media (max-width: 640px) {
+  .privacy-topbar {
     border-radius: 12px;
-    border: 1px solid transparent;
-    background: rgba(15, 23, 42, 0.26);
-    padding: 10px;
-    text-decoration: none;
-    transition: background-color 0.18s ease, border-color 0.18s ease;
+    padding: 12px;
   }
 
-  .privacy-sidenav-link:hover {
-    background: rgba(30, 41, 59, 0.55);
-    border-color: rgba(148, 163, 184, 0.25);
+  .privacy-topbar-title {
+    font-size: 16px;
+    line-height: 21px;
   }
 
-  .privacy-sidenav-link.is-active {
-    border-color: rgba(56, 189, 248, 0.4);
-    background: rgba(14, 116, 144, 0.26);
-  }
-
-  .privacy-sidenav-link-title {
-    color: #f8fafc;
-    font-size: 14px;
-    line-height: 18px;
-    font-weight: 600;
-  }
-
-  .privacy-sidenav-link-summary {
-    color: #94a3b8;
-    font-size: 12px;
-    line-height: 16px;
-  }
-
-  .privacy-main {
-    display: grid;
-    gap: 12px;
+  .privacy-topbar-actions {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
   .privacy-hero,
   .privacy-section-card,
   .privacy-faq {
-    border: 1px solid rgba(148, 163, 184, 0.22);
-    border-radius: 16px;
-    background: rgba(15, 23, 42, 0.46);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    box-shadow: 0 10px 28px rgba(2, 6, 23, 0.2);
-  }
-
-  .privacy-hero {
-    padding: 20px;
-  }
-
-  .privacy-hero-eyebrow {
-    margin: 0;
-    color: #67e8f9;
-    font-size: 12px;
-    line-height: 16px;
-    text-transform: uppercase;
-    letter-spacing: 0.9px;
-    font-weight: 700;
+    border-radius: 12px;
+    padding: 14px;
   }
 
   .privacy-hero-title {
-    margin: 8px 0 10px;
-    color: #f8fafc;
-    font-size: 28px;
-    line-height: 32px;
-    font-weight: 650;
+    font-size: 23px;
+    line-height: 28px;
   }
-
-  .privacy-hero-copy {
-    margin: 0;
-    color: #cbd5e1;
-    font-size: 15px;
-    line-height: 24px;
-    max-width: 68ch;
-  }
-
-  .privacy-hero-actions {
-    margin-top: 16px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .privacy-hero-link {
-    display: inline-flex;
-    align-items: center;
-    height: 34px;
-    padding: 0 12px;
-    border-radius: 10px;
-    border: 1px solid rgba(56, 189, 248, 0.3);
-    color: #a5f3fc;
-    background: rgba(8, 145, 178, 0.2);
-    text-decoration: none;
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .privacy-hero-link.muted {
-    border-color: rgba(148, 163, 184, 0.3);
-    color: #cbd5e1;
-    background: rgba(51, 65, 85, 0.35);
-  }
-
-  .privacy-section-card {
-    padding: 18px;
-    scroll-margin-top: 132px;
-  }
-
-  .privacy-section-head {
-    margin-bottom: 12px;
-  }
-
-  .privacy-section-title {
-    margin: 0;
-    color: #f8fafc;
-    font-size: 21px;
-    line-height: 26px;
-    font-weight: 600;
-  }
-
-  .privacy-section-summary {
-    margin: 8px 0 0;
-    color: #cbd5e1;
-    font-size: 14px;
-    line-height: 22px;
-  }
-
-  .privacy-section-points {
-    margin: 0;
-    padding-left: 18px;
-    display: grid;
-    gap: 8px;
-    color: #e2e8f0;
-    font-size: 14px;
-    line-height: 22px;
-  }
-
-  .privacy-faq {
-    padding: 18px;
-  }
-
-  .privacy-faq-title {
-    margin: 0 0 10px;
-    color: #f8fafc;
-    font-size: 20px;
-    line-height: 25px;
-    font-weight: 600;
-  }
-
-  .privacy-faq-list {
-    display: grid;
-    gap: 8px;
-  }
-
-  .privacy-faq-item {
-    border: 1px solid rgba(148, 163, 184, 0.18);
-    border-radius: 12px;
-    background: rgba(15, 23, 42, 0.38);
-    padding: 10px 12px;
-  }
-
-  .privacy-faq-item summary {
-    cursor: pointer;
-    color: #f8fafc;
-    font-size: 14px;
-    line-height: 20px;
-    font-weight: 600;
-  }
-
-  .privacy-faq-item p {
-    margin: 8px 0 0;
-    color: #cbd5e1;
-    font-size: 14px;
-    line-height: 21px;
-  }
-
-  @media (max-width: 1024px) {
-    .privacy-layout {
-      grid-template-columns: 1fr;
-    }
-
-    .privacy-sidenav {
-      position: static;
-      max-height: none;
-      overflow: visible;
-    }
-
-    .privacy-sidenav-list {
-      grid-auto-flow: column;
-      grid-auto-columns: minmax(220px, 1fr);
-      overflow-x: auto;
-      padding-bottom: 2px;
-    }
-  }
-
-  @media (max-width: 640px) {
-    .privacy-topbar {
-      border-radius: 12px;
-      padding: 12px;
-    }
-
-    .privacy-topbar-title {
-      font-size: 16px;
-      line-height: 21px;
-    }
-
-    .privacy-topbar-actions {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .privacy-hero,
-    .privacy-section-card,
-    .privacy-faq {
-      border-radius: 12px;
-      padding: 14px;
-    }
-
-    .privacy-hero-title {
-      font-size: 23px;
-      line-height: 28px;
-    }
-  }
+}
 
 /* Privacy Center Sidebar parity (Instagram-like) */
 .privacy-page {
@@ -2222,7 +2309,9 @@
   border: 1px solid transparent;
   background: rgba(15, 23, 42, 0.3);
   color: #e2e8f0;
-  transition: background-color 0.18s ease, border-color 0.18s ease;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease;
 }
 
 .privacy-nav-row:hover {
@@ -2387,7 +2476,6 @@
     width: calc(100% - 78px);
   }
 }
-
 
 .ig-dm-shell {
   width: 100%;
@@ -2744,7 +2832,6 @@
   color: var(--primary-text);
 }
 
-
 /* Indicador de mensajes no leídos — Punto azul Instagram pixel-perfect */
 .ig-dm-unread-dot-wrapper {
   margin-left: auto;
@@ -2761,7 +2848,6 @@
   background-color: #0095f6; /* Azul Instagram */
   border-radius: 50%;
 }
-
 
 .ig-dm-request-chip {
   margin-left: auto;
@@ -2876,21 +2962,35 @@
 /* --- Border Radii Dinámicos (Instagram Style) --- */
 
 /* Caso Único (Prioridad sobre ráfaga) */
-.ig-dm-bubble.is-single { border-radius: 18px !important; }
+.ig-dm-bubble.is-single {
+  border-radius: 18px !important;
+}
 
 /* OTROS (Gris) */
-.ig-dm-bubble:not(.is-mine).is-first { border-radius: 18px 18px 18px 4px; }
-.ig-dm-bubble:not(.is-mine).is-middle { border-radius: 4px 18px 18px 4px; }
-.ig-dm-bubble:not(.is-mine).is-last { border-radius: 4px 18px 18px 18px; }
+.ig-dm-bubble:not(.is-mine).is-first {
+  border-radius: 18px 18px 18px 4px;
+}
+.ig-dm-bubble:not(.is-mine).is-middle {
+  border-radius: 4px 18px 18px 4px;
+}
+.ig-dm-bubble:not(.is-mine).is-last {
+  border-radius: 4px 18px 18px 18px;
+}
 
 /* MÍOS (Azul) */
 .ig-dm-bubble.is-mine {
   background: #0095f6;
   margin-left: auto;
 }
-.ig-dm-bubble.is-mine.is-first { border-radius: 18px 18px 4px 18px; }
-.ig-dm-bubble.is-mine.is-middle { border-radius: 18px 4px 4px 18px; }
-.ig-dm-bubble.is-mine.is-last { border-radius: 18px 4px 18px 18px; }
+.ig-dm-bubble.is-mine.is-first {
+  border-radius: 18px 18px 4px 18px;
+}
+.ig-dm-bubble.is-mine.is-middle {
+  border-radius: 18px 4px 4px 18px;
+}
+.ig-dm-bubble.is-mine.is-last {
+  border-radius: 18px 4px 18px 18px;
+}
 
 /* Estado enviando: opacidad reducida muy sutil */
 .ig-dm-bubble.is-sending {
@@ -2956,7 +3056,9 @@
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  transition: background-color 0.15s ease, color 0.1s ease;
+  transition:
+    background-color 0.15s ease,
+    color 0.1s ease;
 }
 
 .ig-dm-hover-btn:hover {
@@ -3029,8 +3131,11 @@
   padding: 8px 12px;
   max-width: 220px;
   cursor: pointer;
-  overflow: hidden;           /* x19livfd — recorta el contenido si excede */
-  background: var(--chat-incoming-message-bubble-background-color, rgba(255,255,255,0.08));
+  overflow: hidden; /* x19livfd — recorta el contenido si excede */
+  background: var(
+    --chat-incoming-message-bubble-background-color,
+    rgba(255, 255, 255, 0.08)
+  );
 }
 
 .ig-dm-reply-quoted-bubble.is-mine {
@@ -3039,12 +3144,12 @@
 
 /* Texto del mensaje citado — x13fuv20 x18b5jzi x1q0q8m5 x1t7ytsu x5n08af */
 .ig-dm-reply-quoted-body {
-  font-size: 15px;            /* x13fuv20 */
-  line-height: 20px;          /* x18b5jzi */
+  font-size: 15px; /* x13fuv20 */
+  line-height: 20px; /* x18b5jzi */
   margin: 0;
   color: var(--primary-text);
-  opacity: 0.7;               /* x3p3xfz / xet2kk3 — dimmed */
-  white-space: nowrap;        /* x5n08af — trunca en 1 línea */
+  opacity: 0.7; /* x3p3xfz / xet2kk3 — dimmed */
+  white-space: nowrap; /* x5n08af — trunca en 1 línea */
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 180px;
@@ -3063,7 +3168,6 @@
   min-height: 20px;
 }
 
-
 /* La burbuja de respuesta tiene radio superior reducido cuando hay reply */
 .ig-dm-bubble.has-reply {
   border-top-left-radius: 8px;
@@ -3078,7 +3182,7 @@
   gap: 8px;
   padding: 8px 16px;
   /* sin background — paridad IG */
-  border-top: 1px solid var(--ig-separator, rgba(255,255,255,0.08));
+  border-top: 1px solid var(--ig-separator, rgba(255, 255, 255, 0.08));
 }
 
 .ig-dm-reply-banner-content {
@@ -3166,7 +3270,9 @@
   justify-content: center;
   color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
 }
 
 .ig-dm-media-add-more:hover {
@@ -3227,8 +3333,14 @@
 }
 
 @keyframes ig-pop-in {
-  from { opacity: 0; transform: scale(0.95); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .ig-dm-menu-header {
@@ -3285,7 +3397,6 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
-
 
 .ig-dm-retry-btn {
   margin-top: 6px;
